@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Jana Address — ИИ-разбор адресов</title>
   <meta name="description" content="Parse raw Kazakhstan delivery addresses into structured, schema-compliant fields with human-in-the-loop review." />
-  <meta name="theme-color" content="#080c10" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23a3e635'/%3E%3Cpath d='M16 6.5a7 7 0 0 0-7 7c0 5.2 7 12 7 12s7-6.8 7-12a7 7 0 0 0-7-7Zm0 9.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2Z' fill='%23080c10'/%3E%3C/svg%3E" />
+  <meta name="theme-color" content="#0a0c0b" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23a3e635'/%3E%3Cpath d='M16 6.5a7 7 0 0 0-7 7c0 5.2 7 12 7 12s7-6.8 7-12a7 7 0 0 0-7-7Zm0 9.6a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2Z' fill='%230a0c0b'/%3E%3C/svg%3E" />
 
   <!-- Inter, Geist, Geist Mono: vendored woff2 (latin + cyrillic incl. Kazakh letters), no network needed -->
   <link rel="stylesheet" href="vendor/fonts/fonts.css" />
@@ -20,8 +20,10 @@
         theme: {
           extend: {
             colors: {
-              ink: { 950: '#080c10', 900: '#0d131a', 850: '#121820', 800: '#16202c' },
-              line: { DEFAULT: '#1e293b', strong: '#273549' },
+              // Deck palette: neutral near-black surfaces, neon lime accent, coral for "needs review".
+              ink: { 950: '#0a0c0b', 900: '#0f1210', 850: '#111412', 800: '#161a17', 700: '#1d221e' },
+              line: { DEFAULT: '#1d211e', strong: '#2a302b' },
+              warn: { 300: '#ffb38f', 400: '#ff7a45', 500: '#f2602b' },
             },
             fontFamily: {
               sans: ['Inter', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
@@ -37,18 +39,19 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #080c10;
-      --bg-2: #0d131a;
-      --surface: #121820;
-      --surface-2: #16202c;
-      --line: #1e293b;
-      --line-2: #273549;
+      --bg: #0a0c0b;
+      --bg-2: #0f1210;
+      --surface: #111412;
+      --surface-2: #161a17;
+      --line: #1d211e;
+      --line-2: #2a302b;
       --lime: #a3e635;
       --lime-2: #bef264;
-      --amber: #fbbf24;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --dim: #64748b;
+      --warn: #ff7a45;       /* "needs review" — validated against lime for colour-blind separation */
+      --warn-2: #ffb38f;
+      --text: #f5f7f4;
+      --muted: #9aa19a;
+      --dim: #6b726b;
     }
     html { background: var(--bg); }
     body {
@@ -62,50 +65,64 @@
     }
     ::selection { background: rgba(163, 230, 53, .3); color: #fff; }
 
-    /* ---------- Ambient backdrop (lime glow + film grain, as in the deck) ---------- */
+    /* ---------- Ambient backdrop (the deck's lime glow + film grain) ---------- */
     .backdrop { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-    .glow { position: absolute; border-radius: 9999px; filter: blur(80px); }
-    .glow-a { width: 62vw; height: 62vw; right: -20vw; bottom: -26vw; background: radial-gradient(circle, rgba(163,230,53,.20) 0%, rgba(163,230,53,.07) 42%, transparent 70%); }
-    .glow-b { width: 42vw; height: 42vw; left: -16vw; top: -18vw; background: radial-gradient(circle, rgba(163,230,53,.09) 0%, transparent 68%); }
-    .glow-c { width: 30vw; height: 30vw; left: 36vw; top: 42vh; background: radial-gradient(circle, rgba(163,230,53,.035) 0%, transparent 70%); }
+    .glow { position: absolute; border-radius: 9999px; filter: blur(70px); }
+    .glow-a { width: 70vw; height: 70vw; right: -22vw; bottom: -30vw; background: radial-gradient(circle, rgba(163,230,53,.30) 0%, rgba(132,204,22,.12) 38%, transparent 68%); }
+    .glow-b { width: 44vw; height: 44vw; left: -18vw; top: -20vw; background: radial-gradient(circle, rgba(163,230,53,.08) 0%, transparent 68%); }
+    .glow-c { width: 34vw; height: 34vw; right: 6vw; top: 4vh; background: radial-gradient(circle, rgba(163,230,53,.07) 0%, transparent 70%); }
     .grain {
-      position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay;
+      position: absolute; inset: 0; opacity: .09; mix-blend-mode: overlay;
       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
     }
 
     /* ---------- Surfaces ---------- */
     .card {
       position: relative;
-      background: linear-gradient(180deg, rgba(22,32,44,.82) 0%, rgba(18,24,32,.82) 100%);
+      background: linear-gradient(180deg, rgba(22,26,23,.86) 0%, rgba(17,20,18,.86) 100%);
       border: 1px solid var(--line);
-      border-radius: 1rem;
-      -webkit-backdrop-filter: blur(16px);
-      backdrop-filter: blur(16px);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 24px 60px -32px rgba(0,0,0,.85);
+      border-radius: 1.25rem;
+      -webkit-backdrop-filter: blur(18px);
+      backdrop-filter: blur(18px);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 24px 60px -32px rgba(0,0,0,.9);
     }
     .eyebrow { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 1; letter-spacing: .16em; text-transform: uppercase; color: var(--lime); }
     .eyebrow.is-muted { color: var(--muted); }
-    .eyebrow.is-amber { color: var(--amber); }
-    .kpi-num { font-family: Geist, Inter, sans-serif; font-weight: 300; font-size: clamp(2.75rem, 4.4vw, 4.25rem); line-height: .95; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+    .eyebrow.is-warn { color: var(--warn); }
+
+    /* Big figures: same sans as the rest, light weight like the deck, proportional digits. */
+    .hero-num { font-family: Geist, Inter, sans-serif; font-weight: 300; font-size: clamp(4rem, 8vw, 6.5rem); line-height: .9; letter-spacing: -.05em; color: var(--lime); text-shadow: 0 0 60px rgba(163,230,53,.35); }
+    .hero-num.is-empty { color: var(--line-2); text-shadow: none; }
+    .tile { padding: 1.1rem 1.15rem 1rem; display: flex; flex-direction: column; min-height: 168px; }
+    .tile-num { font-family: Geist, Inter, sans-serif; font-weight: 300; font-size: clamp(2.2rem, 3vw, 2.75rem); line-height: 1; letter-spacing: -.04em; margin-top: auto; padding-top: 1.25rem; }
+    .tile-cap { margin-top: .5rem; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile-tag { font-family: 'Geist Mono', monospace; font-size: 10.5px; padding: .14rem .45rem; border-radius: 9999px; border: 1px solid var(--line-2); color: var(--muted); }
+    .tile-tag.is-lime { color: var(--lime-2); border-color: rgba(163,230,53,.35); background: rgba(163,230,53,.07); }
+    .tile-tag.is-warn { color: var(--warn-2); border-color: rgba(255,122,69,.38); background: rgba(255,122,69,.07); }
 
     .dot { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; background: var(--lime); box-shadow: 0 0 10px rgba(163,230,53,.9); flex: none; }
-    .dot.is-amber { background: var(--amber); box-shadow: 0 0 10px rgba(251,191,36,.85); }
+    .dot.is-warn { background: var(--warn); box-shadow: 0 0 10px rgba(255,122,69,.85); }
     .dot.is-slate { background: var(--dim); box-shadow: none; }
 
-    .meter { height: 3px; border-radius: 9999px; background: rgba(148,163,184,.12); overflow: hidden; }
+    /* Meter: fill carries the state, the track is a faint step of the same hue. */
+    .meter { height: 3px; border-radius: 9999px; background: rgba(163,230,53,.10); overflow: hidden; margin-top: .85rem; }
+    .meter.is-warn { background: rgba(255,122,69,.10); }
+    .meter.is-neutral { background: rgba(255,255,255,.07); }
     .meter > span { display: block; height: 100%; width: 0; border-radius: inherit; transition: width .6s cubic-bezier(.2,.8,.2,1); }
 
     /* ---------- Status pill ---------- */
-    .status-pill { display: inline-flex; align-items: center; gap: .55rem; border-radius: 9999px; padding: .45rem .9rem; font-size: 12.5px; color: var(--lime-2); background: rgba(163,230,53,.08); border: 1px solid rgba(163,230,53,.32); box-shadow: 0 0 24px -4px rgba(163,230,53,.35), inset 0 0 12px rgba(163,230,53,.06); transition: box-shadow .2s, border-color .2s; }
+    .status-pill { display: inline-flex; align-items: center; gap: .55rem; border-radius: 9999px; padding: .45rem .9rem; font-size: 12.5px; color: var(--lime-2); background: rgba(163,230,53,.08); border: 1px solid rgba(163,230,53,.32); box-shadow: 0 0 24px -4px rgba(163,230,53,.35), inset 0 0 12px rgba(163,230,53,.06); transition: box-shadow .2s, border-color .2s, color .2s; }
     .status-pill:hover { border-color: rgba(163,230,53,.6); box-shadow: 0 0 32px -4px rgba(163,230,53,.5), inset 0 0 12px rgba(163,230,53,.08); }
     .status-dot { position: relative; width: 7px; height: 7px; border-radius: 9999px; background: var(--lime); box-shadow: 0 0 10px var(--lime); }
     .status-dot::after { content: ''; position: absolute; inset: -4px; border-radius: inherit; background: var(--lime); opacity: .45; animation: ping 1.9s cubic-bezier(0,0,.2,1) infinite; }
-    .status-pill[data-state="checking"] .status-dot { background: var(--dim); box-shadow: none; }
+    .status-pill[data-state="checking"] .status-dot, .status-pill[data-state="waking"] .status-dot { background: var(--dim); box-shadow: none; }
     .status-pill[data-state="checking"] .status-dot::after { background: var(--dim); }
+    .status-pill[data-state="waking"] { color: #d6dcd4; border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.04); box-shadow: none; }
+    .status-pill[data-state="waking"] .status-dot::after { background: var(--muted); animation-duration: 3.2s; }
     @keyframes ping { 75%, 100% { transform: scale(2.2); opacity: 0; } }
 
     /* ---------- Language switcher ---------- */
-    .lang-switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9999px; border: 1px solid var(--line-2); background: rgba(8,12,16,.55); }
+    .lang-switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9999px; border: 1px solid var(--line-2); background: rgba(10,12,11,.6); }
     .lang-switch button { min-width: 2.5rem; padding: .34rem .6rem; border-radius: 9999px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: .12em; color: var(--muted); transition: color .15s, background .15s, box-shadow .15s; }
     .lang-switch button:hover { color: var(--text); }
     .lang-switch button.is-active { background: var(--lime); color: #0a0f05; font-weight: 600; box-shadow: 0 0 18px -4px rgba(163,230,53,.65); }
@@ -116,12 +133,111 @@
     .btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none !important; }
     .btn-lime { background: var(--lime); color: #0a0f05; font-weight: 600; box-shadow: 0 0 0 1px rgba(190,242,100,.6) inset, 0 0 28px -2px rgba(163,230,53,.55); }
     .btn-lime:hover:not(:disabled) { background: var(--lime-2); box-shadow: 0 0 0 1px rgba(217,249,157,.8) inset, 0 0 44px 0 rgba(163,230,53,.7); }
-    .btn-ghost { color: #e2e8f0; background: rgba(148,163,184,.06); border: 1px solid var(--line-2); }
+    .btn-ghost { color: #e4e8e2; background: rgba(255,255,255,.04); border: 1px solid var(--line-2); }
     .btn-ghost:hover:not(:disabled) { border-color: rgba(163,230,53,.5); color: var(--lime-2); background: rgba(163,230,53,.06); }
-    .icon-btn { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 9999px; color: var(--muted); border: 1px solid var(--line-2); background: rgba(148,163,184,.05); transition: color .15s, border-color .15s; }
+    .icon-btn { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 9999px; color: var(--muted); border: 1px solid var(--line-2); background: rgba(255,255,255,.03); transition: color .15s, border-color .15s; }
     .icon-btn:hover { color: var(--text); border-color: var(--muted); }
 
     :focus-visible { outline: 2px solid rgba(163,230,53,.7); outline-offset: 2px; }
+
+    /* ---------- Mascot (SVG; expressions are driven by data-mood) ---------- */
+    .mascot { display: block; width: 100%; height: auto; overflow: visible; }
+    .mascot * { transform-box: fill-box; transform-origin: center; }
+    .mascot .m-ground { fill: #000; opacity: .5; filter: blur(3px); }
+    .mascot .m-shine { fill: #fff; opacity: .42; }
+    .mascot .m-spot { fill: #4d7c0f; opacity: .28; }
+    .mascot .m-cheek { fill: #65a30d; opacity: .42; }
+    .mascot .m-ink { fill: none; stroke: #0b0d0b; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+    .mascot .m-dark { fill: #0b0d0b; }
+    .mascot .m-mouth-open .m-tongue { fill: #f472b6; }
+    .mascot .m-extra text { font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 600; fill: var(--lime-2); }
+    .mascot .m-sparkle { fill: var(--lime-2); }
+    .mascot .m-bubble { fill: rgba(255,255,255,.08); stroke: rgba(255,255,255,.18); stroke-width: 1.5; }
+    .mascot .m-bubble-dot { fill: var(--lime-2); }
+
+    /* Visibility per mood */
+    .mascot .m-eyes, .mascot .m-mouth, .mascot .m-extra, .mascot .m-brow { display: none; }
+    .mascot[data-mood="idle"] .m-eyes-open, .mascot[data-mood="idle"] .m-mouth-smile,
+    .mascot[data-mood="waiting"] .m-eyes-open, .mascot[data-mood="waiting"] .m-mouth-o, .mascot[data-mood="waiting"] .m-dots,
+    .mascot[data-mood="sleeping"] .m-eyes-closed, .mascot[data-mood="sleeping"] .m-mouth-sleep, .mascot[data-mood="sleeping"] .m-zzz,
+    .mascot[data-mood="happy"] .m-eyes-happy, .mascot[data-mood="happy"] .m-mouth-open, .mascot[data-mood="happy"] .m-sparkles,
+    .mascot[data-mood="confused"] .m-eyes-open, .mascot[data-mood="confused"] .m-mouth-wavy, .mascot[data-mood="confused"] .m-question, .mascot[data-mood="confused"] .m-brow { display: inline; }
+
+    /* Motion per mood */
+    .mascot .m-body { animation: m-float 3.6s ease-in-out infinite; transform-origin: 50% 100%; }
+    .mascot .m-eyes-open { animation: m-blink 5.2s infinite; }
+    .mascot[data-mood="waiting"] .m-body { animation-duration: 2.4s; }
+    .mascot[data-mood="waiting"] .m-pupil { animation: m-look 2.6s ease-in-out infinite; }
+    .mascot[data-mood="waiting"] .m-bubble-dot { animation: m-dot 1.2s ease-in-out infinite; }
+    .mascot[data-mood="waiting"] .m-bubble-dot:nth-of-type(2) { animation-delay: .18s; }
+    .mascot[data-mood="waiting"] .m-bubble-dot:nth-of-type(3) { animation-delay: .36s; }
+    .mascot[data-mood="sleeping"] .m-body { animation: m-breathe 4.2s ease-in-out infinite; }
+    .mascot[data-mood="sleeping"] .m-z { animation: m-z 3.6s ease-in infinite; opacity: 0; }
+    .mascot[data-mood="sleeping"] .m-z:nth-of-type(2) { animation-delay: 1.2s; }
+    .mascot[data-mood="sleeping"] .m-z:nth-of-type(3) { animation-delay: 2.4s; }
+    .mascot[data-mood="happy"] .m-body { animation: m-hop .9s cubic-bezier(.3,.7,.4,1) infinite; }
+    .mascot[data-mood="happy"] .m-arm-l { animation: m-wave-l .45s ease-in-out infinite alternate; }
+    .mascot[data-mood="happy"] .m-arm-r { animation: m-wave-r .45s ease-in-out infinite alternate; }
+    .mascot[data-mood="happy"] .m-sparkle { animation: m-twinkle 1.2s ease-in-out infinite; }
+    .mascot[data-mood="happy"] .m-sparkle:nth-of-type(2) { animation-delay: .3s; }
+    .mascot[data-mood="happy"] .m-sparkle:nth-of-type(3) { animation-delay: .6s; }
+    .mascot[data-mood="happy"] .m-sparkle:nth-of-type(4) { animation-delay: .9s; }
+    .mascot[data-mood="confused"] .m-body { animation: m-tilt 2.8s ease-in-out infinite; }
+    .mascot[data-mood="confused"] .m-pupil-l { transform: translate(-4px, -5px); }
+    .mascot[data-mood="confused"] .m-pupil-r { transform: translate(3px, 2px); }
+    .mascot[data-mood="confused"] .m-question { animation: m-bob 1.6s ease-in-out infinite; }
+
+    @keyframes m-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    @keyframes m-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.08); } }
+    @keyframes m-look { 0%, 100% { transform: translateX(-6px); } 50% { transform: translateX(6px); } }
+    @keyframes m-dot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+    @keyframes m-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.025, .965); } }
+    @keyframes m-z { 0% { opacity: 0; transform: translate(0, 6px) scale(.7); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(10px, -26px) scale(1.15); } }
+    @keyframes m-hop { 0%, 100% { transform: translateY(0) scale(1.04, .96); } 40% { transform: translateY(-20px) scale(.97, 1.04); } 70% { transform: translateY(0) scale(1.03, .97); } }
+    @keyframes m-wave-l { from { transform: rotate(10deg); } to { transform: rotate(-38deg); } }
+    @keyframes m-wave-r { from { transform: rotate(-10deg); } to { transform: rotate(38deg); } }
+    @keyframes m-twinkle { 0%, 100% { opacity: .2; transform: scale(.6) rotate(0deg); } 50% { opacity: 1; transform: scale(1.1) rotate(25deg); } }
+    @keyframes m-tilt { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(-2deg) translateY(-3px); } }
+    @keyframes m-bob { 0%, 100% { transform: translateY(0) rotate(8deg); } 50% { transform: translateY(-6px) rotate(-4deg); } }
+
+    /* Speech bubble next to the hero mascot */
+    .bubble { position: relative; max-width: 300px; padding: .9rem 1rem; border-radius: 1rem; background: rgba(17,20,18,.92); border: 1px solid var(--line-2); box-shadow: 0 18px 40px -18px rgba(0,0,0,.9); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); transition: border-color .25s; }
+    .bubble::after { content: ''; position: absolute; width: 14px; height: 14px; background: inherit; border: inherit; border-top: 0; border-left: 0; transform: rotate(-45deg); right: -8px; top: 30px; }
+    .bubble[data-mood="happy"] { border-color: rgba(163,230,53,.45); }
+    .bubble[data-mood="confused"] { border-color: rgba(255,122,69,.45); }
+    @media (max-width: 1023px) { .bubble::after { right: auto; left: 28px; top: -8px; transform: rotate(-135deg); } }
+    .bubble.is-pop { animation: pop .25s cubic-bezier(.2,.8,.2,1); }
+
+    /* ---------- Charts ---------- */
+    .chart-empty { display: grid; place-items: center; height: 168px; font-size: 13px; color: var(--dim); border: 1px dashed var(--line-2); border-radius: .9rem; }
+    .hist { position: relative; height: 150px; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--line-2); }
+    .hist-slot { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; cursor: default; border-radius: 6px; }
+    .hist-slot:hover .hist-bar, .hist-slot:focus-visible .hist-bar { filter: brightness(1.25); }
+    .hist-bar { width: min(24px, 100%); border-radius: 4px 4px 0 0; transition: height .5s cubic-bezier(.2,.8,.2,1), filter .15s; min-height: 0; }
+    .hist-bar.is-ready { background: var(--lime); }
+    .hist-bar.is-review { background: var(--warn); }
+    .hist-cap { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--text); margin-bottom: 4px; }
+    .hist-threshold { position: absolute; top: -6px; bottom: 0; width: 1px; background: rgba(245,247,244,.55); pointer-events: none; }
+    .hist-threshold span { position: absolute; top: -12px; left: 5px; white-space: nowrap; font-family: 'Geist Mono', monospace; font-size: 10px; color: var(--muted); }
+    .hist-axis { position: relative; height: 18px; margin-top: 6px; font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--dim); }
+    .hist-axis span { position: absolute; transform: translateX(-50%); }
+    .hist-axis span:first-child { transform: none; }
+    .hist-axis span:last-child { transform: translateX(-100%); }
+    .bars { display: grid; gap: 7px; }
+    .bar-row { display: grid; grid-template-columns: minmax(84px, 38%) 1fr 44px; align-items: center; gap: 10px; font-size: 12.5px; border-radius: 6px; }
+    .bar-row:hover .bar-fill, .bar-row:focus-visible .bar-fill { filter: brightness(1.25); }
+    .bar-label { color: #d6dcd4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+    .bar-track { display: block; height: 8px; border-radius: 0 4px 4px 0; background: rgba(163,230,53,.09); overflow: hidden; }
+    .bar-fill { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--lime); transition: width .5s cubic-bezier(.2,.8,.2,1), filter .15s; }
+    .bar-row.is-warn .bar-track { background: rgba(255,122,69,.09); }
+    .bar-row.is-warn .bar-fill { background: var(--warn); }
+    .bar-value { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--muted); }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .chart-tip { position: fixed; z-index: 70; pointer-events: none; padding: .45rem .65rem; border-radius: .6rem; background: rgba(10,12,11,.96); border: 1px solid var(--line-2); box-shadow: 0 12px 30px -12px rgba(0,0,0,.9); font-size: 12px; color: var(--muted); white-space: nowrap; opacity: 0; transition: opacity .12s; }
+    .chart-tip.is-on { opacity: 1; }
+    .chart-tip strong { display: block; color: var(--text); font-weight: 600; font-size: 13px; }
+    .sr-only-table { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
     /* ---------- Drop zone ---------- */
     .dropzone { border: 1.5px dashed rgba(163,230,53,.28); border-radius: 1rem; background: rgba(163,230,53,.02); cursor: pointer; transition: border-color .2s, background .2s, box-shadow .2s; }
@@ -130,56 +246,56 @@
     .dz-icon { transition: transform .25s cubic-bezier(.2,.8,.2,1); }
 
     /* ---------- Form controls ---------- */
-    .field-input { width: 100%; background: rgba(8,12,16,.7); border: 1px solid var(--line-2); border-radius: .75rem; padding: .62rem .85rem; color: var(--text); font-size: 14px; transition: border-color .15s, box-shadow .15s; }
-    .field-input::placeholder { color: #475569; }
+    .field-input { width: 100%; background: rgba(10,12,11,.7); border: 1px solid var(--line-2); border-radius: .75rem; padding: .62rem .85rem; color: var(--text); font-size: 14px; transition: border-color .15s, box-shadow .15s; }
+    .field-input::placeholder { color: #4b524b; }
     .field-input:focus { outline: none; border-color: rgba(163,230,53,.75); box-shadow: 0 0 0 3px rgba(163,230,53,.14); }
-    .field-input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #0d131a inset; -webkit-text-fill-color: var(--text); }
+    .field-input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #0f1210 inset; -webkit-text-fill-color: var(--text); }
 
     /* ---------- Segmented tabs ---------- */
     .no-scrollbar { scrollbar-width: none; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .tab { flex: none; display: inline-flex; align-items: center; gap: .5rem; border-radius: 9999px; padding: .45rem .85rem; font-size: 13px; color: var(--muted); transition: color .15s, background .15s, box-shadow .15s; }
     .tab:hover { color: var(--text); }
-    .tab .count { font-family: 'Geist Mono', monospace; font-size: 11px; padding: .12rem .45rem; border-radius: 9999px; background: rgba(148,163,184,.1); color: var(--muted); }
-    .tab .count.is-amber { background: rgba(251,191,36,.12); color: var(--amber); }
+    .tab .count { font-family: 'Geist Mono', monospace; font-size: 11px; padding: .12rem .45rem; border-radius: 9999px; background: rgba(255,255,255,.07); color: var(--muted); }
+    .tab .count.is-warn { background: rgba(255,122,69,.12); color: var(--warn-2); }
     .tab.is-active { background: var(--lime); color: #0a0f05; font-weight: 600; box-shadow: 0 0 22px -4px rgba(163,230,53,.6); }
-    .tab.is-active .count { background: rgba(8,12,16,.18); color: #0a0f05; }
+    .tab.is-active .count { background: rgba(10,12,11,.18); color: #0a0f05; }
 
-    /* ---------- Data table ---------- */
+    /* ---------- Data table (the deck's mono table look) ---------- */
     .data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
-    .data-table thead th { padding: .8rem 1rem; text-align: left; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); background: rgba(8,12,16,.35); border-bottom: 1px solid var(--line); white-space: nowrap; }
-    .data-table tbody td { padding: .8rem 1rem; border-bottom: 1px solid rgba(30,41,59,.75); vertical-align: middle; color: #e2e8f0; }
+    .data-table thead th { padding: .8rem 1rem; text-align: left; font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); background: rgba(10,12,11,.35); border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .data-table tbody td { padding: .8rem 1rem; border-bottom: 1px solid rgba(29,33,30,.9); vertical-align: middle; color: #e4e8e2; }
     .data-table tbody tr { cursor: pointer; transition: background .15s; }
-    .data-table tbody tr:hover { background: rgba(148,163,184,.045); }
+    .data-table tbody tr:hover { background: rgba(255,255,255,.035); }
     .data-table tbody tr:focus-visible { outline: 1px solid rgba(163,230,53,.6); outline-offset: -1px; }
-    .data-table tbody tr.is-review { background: linear-gradient(90deg, rgba(251,191,36,.10) 0%, rgba(251,191,36,.025) 30%, transparent 70%); }
-    .data-table tbody tr.is-review:hover { background: linear-gradient(90deg, rgba(251,191,36,.16) 0%, rgba(251,191,36,.045) 35%, rgba(148,163,184,.03) 75%); }
-    .data-table tbody tr.is-review td { border-bottom-color: rgba(251,191,36,.16); }
-    .data-table tbody tr.is-review td:first-child { box-shadow: inset 3px 0 0 var(--amber), inset 18px 0 22px -18px rgba(251,191,36,.75); }
+    .data-table tbody tr.is-review { background: linear-gradient(90deg, rgba(255,122,69,.10) 0%, rgba(255,122,69,.025) 30%, transparent 70%); }
+    .data-table tbody tr.is-review:hover { background: linear-gradient(90deg, rgba(255,122,69,.16) 0%, rgba(255,122,69,.045) 35%, rgba(255,255,255,.03) 75%); }
+    .data-table tbody tr.is-review td { border-bottom-color: rgba(255,122,69,.16); }
+    .data-table tbody tr.is-review td:first-child { box-shadow: inset 3px 0 0 var(--warn), inset 18px 0 22px -18px rgba(255,122,69,.75); }
     .data-table tbody tr.is-verified td:first-child { box-shadow: inset 3px 0 0 var(--lime), inset 18px 0 22px -18px rgba(163,230,53,.55); }
     .data-table tbody tr.is-flash { animation: flash 1.2s ease-out; }
     @keyframes flash { 0% { background: rgba(163,230,53,.22); } 100% { background: transparent; } }
-    .nil { color: #334155; }
+    .nil { color: #3a403a; }
     .ref-tag { display: inline-block; margin-left: .4rem; padding: 2px 5px 1px; border: 1px solid var(--line-2); border-radius: 5px; font-family: 'Geist Mono', monospace; font-size: 9px; line-height: 1.2; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); vertical-align: 1px; }
 
     .badge-verified { display: inline-flex; align-items: center; gap: .3rem; padding: .18rem .5rem; border-radius: 9999px; font-size: 11px; color: var(--lime-2); background: rgba(163,230,53,.1); border: 1px solid rgba(163,230,53,.3); box-shadow: 0 0 14px -4px rgba(163,230,53,.6); }
     .conf-pill { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .7rem; border-radius: 9999px; font-size: 12px; border: 1px solid; }
     .conf-pill.is-lime { color: var(--lime-2); background: rgba(163,230,53,.08); border-color: rgba(163,230,53,.35); box-shadow: 0 0 18px -6px rgba(163,230,53,.7); }
-    .conf-pill.is-amber { color: #fcd34d; background: rgba(251,191,36,.08); border-color: rgba(251,191,36,.38); box-shadow: 0 0 18px -6px rgba(251,191,36,.7); }
-    .chip { display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .65rem; border-radius: 9999px; font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--muted); background: rgba(148,163,184,.06); border: 1px solid var(--line-2); }
-    .example-chip { padding: .32rem .7rem; border-radius: 9999px; font-size: 12px; color: var(--muted); background: rgba(148,163,184,.05); border: 1px solid var(--line); transition: color .15s, border-color .15s; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .conf-pill.is-warn { color: var(--warn-2); background: rgba(255,122,69,.08); border-color: rgba(255,122,69,.4); box-shadow: 0 0 18px -6px rgba(255,122,69,.7); }
+    .chip { display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .65rem; border-radius: 9999px; font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--line-2); }
+    .example-chip { padding: .32rem .7rem; border-radius: 9999px; font-size: 12px; color: var(--muted); background: rgba(255,255,255,.03); border: 1px solid var(--line); transition: color .15s, border-color .15s; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .example-chip:hover { color: var(--lime-2); border-color: rgba(163,230,53,.45); }
-    kbd { font-family: 'Geist Mono', monospace; font-size: 10.5px; padding: .1rem .38rem; border-radius: 6px; border: 1px solid var(--line-2); border-bottom-width: 2px; color: var(--muted); background: rgba(8,12,16,.5); }
+    kbd { font-family: 'Geist Mono', monospace; font-size: 10.5px; padding: .1rem .38rem; border-radius: 6px; border: 1px solid var(--line-2); border-bottom-width: 2px; color: var(--muted); background: rgba(10,12,11,.5); }
 
     /* ---------- Dialog ---------- */
     dialog#editor { margin: auto; padding: 0; border: 0; background: transparent; color: inherit; width: min(880px, calc(100vw - 2rem)); max-width: none; max-height: calc(100vh - 2rem); overflow: visible; }
-    dialog#editor::backdrop { background: rgba(3,5,8,.74); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    dialog#editor::backdrop { background: rgba(3,4,3,.76); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
     dialog#editor[open] .dialog-card { animation: pop .2s cubic-bezier(.2,.8,.2,1); }
-    .dialog-card { max-height: calc(100vh - 2rem); overflow-y: auto; background: linear-gradient(180deg, #16202c 0%, #121820 100%); border-color: var(--line-2); box-shadow: 0 0 0 1px rgba(163,230,53,.06), 0 40px 120px -20px rgba(0,0,0,.9), 0 0 80px -30px rgba(163,230,53,.25); }
+    .dialog-card { max-height: calc(100vh - 2rem); overflow-y: auto; background: linear-gradient(180deg, #161a17 0%, #111412 100%); border-color: var(--line-2); box-shadow: 0 0 0 1px rgba(163,230,53,.06), 0 40px 120px -20px rgba(0,0,0,.9), 0 0 80px -30px rgba(163,230,53,.25); }
     @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
 
     /* ---------- Toasts ---------- */
-    .toast { display: flex; align-items: center; gap: .6rem; max-width: 380px; padding: .7rem 1rem; border-radius: .9rem; font-size: 13px; color: #e2e8f0; background: rgba(18,24,32,.94); border: 1px solid var(--line-2); box-shadow: 0 18px 40px -16px rgba(0,0,0,.9); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); animation: toast-in .25s cubic-bezier(.2,.8,.2,1); }
+    .toast { display: flex; align-items: center; gap: .6rem; max-width: 380px; padding: .7rem 1rem; border-radius: .9rem; font-size: 13px; color: #e4e8e2; background: rgba(17,20,18,.95); border: 1px solid var(--line-2); box-shadow: 0 18px 40px -16px rgba(0,0,0,.9); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); animation: toast-in .25s cubic-bezier(.2,.8,.2,1); }
     .toast.is-out { opacity: 0; transform: translateY(6px); transition: opacity .25s, transform .25s; }
     @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
@@ -188,11 +304,11 @@
 
     ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 9999px; border: 2px solid var(--bg); }
-    ::-webkit-scrollbar-thumb:hover { background: #273549; }
+    ::-webkit-scrollbar-thumb { background: #1d211e; border-radius: 9999px; border: 2px solid var(--bg); }
+    ::-webkit-scrollbar-thumb:hover { background: #2a302b; }
 
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
   </style>
   <script src="app.js" defer></script>
@@ -227,63 +343,121 @@
         <button id="statusPill" type="button" class="status-pill" data-state="checking">
           <span class="status-dot"></span>
           <span class="font-medium" data-i18n="status_online">Система онлайн</span>
-          <span class="text-lime-400/40">/</span>
+          <span class="opacity-40">/</span>
           <span id="statusEngine" class="font-mono text-[11px] tracking-wide">Подключение…</span>
         </button>
-        <span class="hidden font-mono text-xs text-slate-500 xl:inline" data-i18n="copyright">©2026 Jana Post · Хакатон</span>
+        <span class="hidden font-mono text-xs text-neutral-500 xl:inline" data-i18n="copyright">©2026 Jana Post · Хакатон</span>
       </div>
     </header>
 
-    <!-- ===================== Hero + KPI bar ===================== -->
-    <section class="grid items-end gap-8 pb-10 pt-6 lg:grid-cols-12 lg:pt-10">
-      <div class="lg:col-span-5">
+    <!-- ===================== Hero: headline + hero figure + mascot ===================== -->
+    <section class="grid items-center gap-8 pb-8 pt-4 lg:grid-cols-12 lg:pt-8">
+      <div class="lg:col-span-7">
         <p class="eyebrow" data-i18n="hero_eyebrow">Адресная аналитика · Jana Post</p>
-        <h1 class="mt-5 font-display text-[2.6rem] font-normal leading-[1.04] tracking-[-0.035em] sm:text-5xl xl:text-[3.6rem]">
-          <span class="text-slate-500" data-i18n="hero_line1">Одна строка на входе.</span><br />
-          <span class="text-slate-50" data-i18n="hero_line2">Одиннадцать полей на выходе.</span>
+        <h1 class="mt-5 font-display text-[2.5rem] font-normal leading-[1.04] tracking-[-0.035em] sm:text-5xl xl:text-[3.5rem]">
+          <span class="text-neutral-500" data-i18n="hero_line1">Одна строка на входе.</span><br />
+          <span class="text-neutral-50" data-i18n="hero_line2">Одиннадцать полей на выходе.</span>
         </h1>
-        <p class="mt-5 max-w-md text-[15px] leading-relaxed text-slate-400" data-i18n-html="hero_lead">
-          Двуязычные, слитные, с опечатками — строки доставки превращаются в запись строго по схеме.
-          Всё, что ниже <span class="font-mono text-amber-300">0.70</span> уверенности, уходит на ручную проверку.
-        </p>
-        <ul class="mt-7 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11.5px] uppercase tracking-[0.12em] text-slate-400">
+        <div class="mt-8 flex flex-wrap items-end gap-x-8 gap-y-3">
+          <p id="heroReady" class="hero-num">—</p>
+          <p id="heroCaption" class="max-w-xs pb-2 text-sm leading-relaxed text-neutral-400"></p>
+        </div>
+        <ul class="mt-7 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11.5px] uppercase tracking-[0.12em] text-neutral-400">
           <li class="flex items-center gap-2"><span class="dot"></span>RU · KZ · LAT</li>
           <li class="flex items-center gap-2"><span class="dot is-slate"></span><span data-i18n="hero_b2">11 полей схемы</span></li>
           <li class="flex items-center gap-2"><span class="dot is-slate"></span><span data-i18n="hero_b3">Работает офлайн</span></li>
         </ul>
       </div>
 
-      <div class="grid gap-4 sm:grid-cols-3 lg:col-span-7">
-        <article class="card flex min-h-[200px] flex-col p-5">
-          <p class="eyebrow is-muted" data-i18n="kpi_total_eyebrow">Всего</p>
-          <p id="kpiTotal" class="kpi-num mt-auto pt-6 text-slate-50" data-value="0">0</p>
-          <p class="mt-2 text-sm text-slate-300" data-i18n="kpi_total_label">Адресов обработано</p>
-          <div class="meter mt-4"><span id="kpiTotalBar" class="bg-slate-400"></span></div>
-          <p id="kpiTotalSub" class="mt-2.5 truncate font-mono text-[11px] text-slate-500">Ожидание данных</p>
-        </article>
-
-        <article class="card flex min-h-[200px] flex-col p-5">
-          <div class="flex items-center justify-between gap-2">
-            <p class="eyebrow" data-i18n="kpi_ready_eyebrow">Валидно</p>
-            <span class="font-mono text-[11px] text-lime-400/70">≥ 0.70</span>
-          </div>
-          <p id="kpiReady" class="kpi-num mt-auto pt-6 text-lime-400 [text-shadow:0_0_40px_rgba(163,230,53,.35)]" data-value="0">0</p>
-          <p class="mt-2 text-sm text-slate-300" data-i18n="kpi_ready_label">Высокая уверенность</p>
-          <div class="meter mt-4"><span id="kpiReadyBar" class="bg-lime-400 shadow-[0_0_10px_#a3e635]"></span></div>
-          <p id="kpiReadySub" class="mt-2.5 truncate font-mono text-[11px] text-slate-500">—</p>
-        </article>
-
-        <button id="kpiReviewCard" type="button" class="card group flex min-h-[200px] flex-col p-5 text-left transition hover:border-amber-400/40" title="Показать очередь проверки" data-i18n-attr="title:kpi_review_title">
-          <div class="flex w-full items-center justify-between gap-2">
-            <p class="eyebrow is-amber" data-i18n="kpi_review_eyebrow">На проверку</p>
-            <span class="font-mono text-[11px] text-amber-300/70">&lt; 0.70</span>
-          </div>
-          <p id="kpiReview" class="kpi-num mt-auto pt-6 text-amber-400 [text-shadow:0_0_40px_rgba(251,191,36,.3)]" data-value="0">0</p>
-          <p class="mt-2 text-sm text-slate-300" data-i18n="kpi_review_label">Очередь ручной проверки</p>
-          <div class="meter mt-4 w-full"><span id="kpiReviewBar" class="bg-amber-400 shadow-[0_0_10px_#fbbf24]"></span></div>
-          <p id="kpiReviewSub" class="mt-2.5 w-full truncate font-mono text-[11px] text-slate-500">—</p>
-        </button>
+      <div class="flex flex-col-reverse items-center gap-4 lg:col-span-5 lg:flex-row lg:justify-end">
+        <div id="mascotBubble" class="bubble" role="status" aria-live="polite" data-mood="idle">
+          <p id="bubbleEyebrow" class="eyebrow is-muted"></p>
+          <p id="bubbleText" class="mt-2 text-[14px] leading-snug text-neutral-100"></p>
+          <button id="bubbleAction" type="button" class="btn btn-ghost mt-3 hidden !px-3 !py-1.5 text-xs"></button>
+        </div>
+        <div id="heroMascot" class="w-40 shrink-0 sm:w-48 xl:w-56"></div>
       </div>
+    </section>
+
+    <!-- ===================== Metric tiles ===================== -->
+    <section class="grid grid-cols-2 gap-3 pb-4 md:grid-cols-3 xl:grid-cols-6" data-i18n-attr="aria-label:metrics_aria" aria-label="Ключевые показатели">
+      <article class="card tile">
+        <p class="eyebrow is-muted" data-i18n="m_total">Всего</p>
+        <p id="kpiTotal" class="tile-num text-neutral-50" data-value="0">0</p>
+        <p id="kpiTotalSub" class="tile-cap"></p>
+        <div class="meter is-neutral"><span id="kpiTotalBar" class="bg-neutral-400"></span></div>
+      </article>
+
+      <article class="card tile">
+        <div class="flex items-center justify-between gap-2">
+          <p class="eyebrow" data-i18n="m_ready">Валидно</p><span class="tile-tag is-lime">≥ 0.70</span>
+        </div>
+        <p id="kpiReady" class="tile-num text-lime-400" data-value="0">0</p>
+        <p id="kpiReadySub" class="tile-cap"></p>
+        <div class="meter"><span id="kpiReadyBar" class="bg-lime-400"></span></div>
+      </article>
+
+      <button id="kpiReviewCard" type="button" class="card tile text-left transition hover:border-warn-400/40" title="Показать очередь проверки" data-i18n-attr="title:kpi_review_title">
+        <div class="flex w-full items-center justify-between gap-2">
+          <p class="eyebrow is-warn" data-i18n="m_review">На проверку</p><span class="tile-tag is-warn">&lt; 0.70</span>
+        </div>
+        <p id="kpiReview" class="tile-num text-warn-400" data-value="0">0</p>
+        <p id="kpiReviewSub" class="tile-cap w-full"></p>
+        <div class="meter is-warn w-full"><span id="kpiReviewBar" class="bg-warn-400"></span></div>
+      </button>
+
+      <article class="card tile">
+        <p class="eyebrow is-muted" data-i18n="m_avg">Средняя уверенность</p>
+        <p id="kpiAvg" class="tile-num text-neutral-50">—</p>
+        <p class="tile-cap" data-i18n="m_avg_cap">по всем записям</p>
+        <div class="meter"><span id="kpiAvgBar" class="bg-lime-400"></span></div>
+      </article>
+
+      <article class="card tile">
+        <p class="eyebrow is-muted" data-i18n="m_verified">Подтверждено</p>
+        <p id="kpiVerified" class="tile-num text-neutral-50" data-value="0">0</p>
+        <p class="tile-cap" data-i18n="m_verified_cap">проверено оператором</p>
+        <div class="meter"><span id="kpiVerifiedBar" class="bg-lime-400"></span></div>
+      </article>
+
+      <article class="card tile">
+        <p class="eyebrow is-muted" data-i18n="m_speed">Скорость</p>
+        <p id="kpiSpeed" class="tile-num text-neutral-50">—</p>
+        <p id="kpiSpeedSub" class="tile-cap"></p>
+        <div class="meter is-neutral"><span id="kpiSpeedBar" class="bg-neutral-400"></span></div>
+      </article>
+    </section>
+
+    <!-- ===================== Analytics ===================== -->
+    <section class="grid gap-3 pb-6 lg:grid-cols-3">
+      <article class="card p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="eyebrow" data-i18n="a_eyebrow">Аналитика</p>
+            <h2 class="mt-2.5 font-display text-[17px] font-medium tracking-tight" data-i18n="a_hist_title">Распределение уверенности</h2>
+            <p class="mt-1 text-xs text-neutral-500" data-i18n="a_hist_sub">записей в каждом диапазоне</p>
+          </div>
+          <div class="legend pt-1">
+            <span><i style="background:var(--lime)"></i><span data-i18n="a_leg_ready">готово ≥ 0.70</span></span>
+            <span><i style="background:var(--warn)"></i><span data-i18n="a_leg_review">проверка &lt; 0.70</span></span>
+          </div>
+        </div>
+        <div id="chartHist" class="mt-6"></div>
+      </article>
+
+      <article class="card p-5">
+        <p class="eyebrow" data-i18n="a_eyebrow">Аналитика</p>
+        <h2 class="mt-2.5 font-display text-[17px] font-medium tracking-tight" data-i18n="a_fields_title">Заполненность полей</h2>
+        <p class="mt-1 text-xs text-neutral-500" data-i18n="a_fields_sub">доля записей, где поле найдено</p>
+        <div id="chartFields" class="mt-5"></div>
+      </article>
+
+      <article class="card p-5">
+        <p class="eyebrow" data-i18n="a_eyebrow">Аналитика</p>
+        <h2 class="mt-2.5 font-display text-[17px] font-medium tracking-tight" data-i18n="a_cities_title">Топ городов</h2>
+        <p class="mt-1 text-xs text-neutral-500" data-i18n="a_cities_sub">аналитика по городам, которой не было в сырой базе</p>
+        <div id="chartCities" class="mt-5"></div>
+      </article>
     </section>
 
     <!-- ===================== Ingestion ===================== -->
@@ -305,18 +479,18 @@
           <span class="dz-icon grid h-14 w-14 place-items-center rounded-2xl border border-lime-400/30 bg-lime-400/10 text-lime-300 shadow-[0_0_30px_-6px_rgba(163,230,53,.6)]">
             <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
           </span>
-          <p class="mt-4 text-[15px] text-slate-100" data-i18n-html="dz_drop">Перетащите <span class="font-mono text-lime-300">sample_input.json</span> сюда</p>
-          <p class="mt-1.5 text-sm text-slate-500" data-i18n-html="dz_browse">или <span class="text-slate-300 underline decoration-lime-400/50 underline-offset-4">выберите файл</span> · JSON-массив <span class="font-mono text-slate-400">{ id, raw_address }</span></p>
+          <p class="mt-4 text-[15px] text-neutral-100" data-i18n-html="dz_drop">Перетащите <span class="font-mono text-lime-300">sample_input.json</span> сюда</p>
+          <p class="mt-1.5 text-sm text-neutral-500" data-i18n-html="dz_browse">или <span class="text-neutral-300 underline decoration-lime-400/50 underline-offset-4">выберите файл</span> · JSON-массив <span class="font-mono text-neutral-400">{ id, raw_address }</span></p>
           <input id="fileInput" type="file" accept=".json,.jsonl,application/json" class="hidden" />
         </div>
 
         <div id="ingestProgress" class="mt-4 hidden">
-          <div class="flex justify-between font-mono text-[11px] text-slate-400">
+          <div class="flex justify-between font-mono text-[11px] text-neutral-400">
             <span id="ingestLabel"></span><span id="ingestPct">0%</span>
           </div>
           <div class="meter mt-2"><span id="ingestBar" class="bg-lime-400 shadow-[0_0_10px_#a3e635]"></span></div>
         </div>
-        <div id="ingestMeta" class="mt-4 flex min-h-[28px] flex-wrap items-center gap-2 text-sm text-slate-500"></div>
+        <div id="ingestMeta" class="mt-4 flex min-h-[28px] flex-wrap items-center gap-2 text-sm text-neutral-500"></div>
       </article>
 
       <!-- Quick test -->
@@ -336,7 +510,7 @@
         <div id="examples" class="mt-3 flex flex-wrap gap-2"></div>
 
         <div id="quickResult" class="mt-5 flex flex-1 flex-col justify-center rounded-2xl border border-dashed border-line-strong/70 bg-ink-950/40 p-4">
-          <p class="text-center text-sm text-slate-500" data-i18n="quick_empty">Здесь появится результат: все поля схемы, уверенность и движок, который ответил.</p>
+          <p class="text-center text-sm text-neutral-500" data-i18n="quick_empty">Здесь появится результат: все поля схемы, уверенность и движок, который ответил.</p>
         </div>
       </article>
     </section>
@@ -347,7 +521,7 @@
         <div class="flex flex-wrap items-end justify-between gap-4 p-6 pb-5">
           <div>
             <p class="eyebrow" data-i18n="results_eyebrow">Результаты</p>
-            <h2 class="mt-3 font-display text-[22px] font-medium tracking-tight"><span data-i18n="results_title">Разобранные записи</span> <span id="resultCount" class="ml-1 font-mono text-base text-slate-500"></span></h2>
+            <h2 class="mt-3 font-display text-[22px] font-medium tracking-tight"><span data-i18n="results_title">Разобранные записи</span> <span id="resultCount" class="ml-1 font-mono text-base text-neutral-500"></span></h2>
           </div>
           <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <button id="resetBtn" type="button" class="btn btn-ghost !px-3.5" title="Удалить все записи из этого браузера" data-i18n-attr="title:reset_title">
@@ -364,12 +538,12 @@
         <div class="flex flex-wrap items-center justify-between gap-3 border-y border-line bg-ink-950/30 px-6 py-3">
           <div id="tabs" class="no-scrollbar flex max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-ink-950/50 p-1" role="tablist" aria-label="Фильтр записей" data-i18n-attr="aria-label:tabs_aria">
             <button type="button" class="tab is-active" data-filter="all" role="tab" aria-selected="true"><span data-i18n="tab_all">Все</span> <span class="count" data-count="all">0</span></button>
-            <button type="button" class="tab" data-filter="review" role="tab" aria-selected="false"><span class="dot is-amber"></span><span data-i18n="tab_review">На проверку (&lt; 0.7)</span> <span class="count is-amber" data-count="review">0</span></button>
+            <button type="button" class="tab" data-filter="review" role="tab" aria-selected="false"><span class="dot is-warn"></span><span data-i18n="tab_review">На проверку (&lt; 0.7)</span> <span class="count is-warn" data-count="review">0</span></button>
             <button type="button" class="tab" data-filter="ready" role="tab" aria-selected="false"><span class="dot"></span><span data-i18n="tab_ready">Готово (≥ 0.7)</span> <span class="count" data-count="ready">0</span></button>
           </div>
           <label class="relative w-full sm:w-80">
             <span class="sr-only" data-i18n="search_label">Поиск по записям</span>
-            <svg viewBox="0 0 24 24" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.2-4.2"/></svg>
+            <svg viewBox="0 0 24 24" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.2-4.2"/></svg>
             <input id="search" type="search" class="field-input !rounded-full !py-2 !pl-11 !pr-12" placeholder="Поиск: id, адрес, город, улица…" data-i18n-attr="placeholder:search_ph" autocomplete="off" spellcheck="false" />
             <kbd class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">/</kbd>
           </label>
@@ -390,7 +564,7 @@
                 <th data-i18n="col_house">Дом</th>
                 <th data-i18n="col_flat">Квартира</th>
                 <th class="!text-right">
-                  <button id="sortConf" type="button" class="inline-flex items-center gap-1.5 uppercase tracking-[0.14em] hover:text-slate-300">
+                  <button id="sortConf" type="button" class="inline-flex items-center gap-1.5 uppercase tracking-[0.14em] hover:text-neutral-300">
                     <span data-i18n="col_conf">Уверенность</span>
                     <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
                   </button>
@@ -402,13 +576,13 @@
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] text-slate-500">
-            <span class="flex items-center gap-2"><span class="h-3 w-[3px] rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></span><span data-i18n="legend_review">нужна проверка · нажмите на строку</span></span>
+          <div class="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] text-neutral-500">
+            <span class="flex items-center gap-2"><span class="h-3 w-[3px] rounded-full bg-warn-400 shadow-[0_0_8px_#ff7a45]"></span><span data-i18n="legend_review">нужна проверка · нажмите на строку</span></span>
             <span class="flex items-center gap-2"><span class="h-3 w-[3px] rounded-full bg-lime-400 shadow-[0_0_8px_#a3e635]"></span><span data-i18n="legend_verified">подтверждено оператором</span></span>
             <span class="flex items-center gap-1.5"><span class="ref-tag !ml-0" data-i18n="ref_tag">спр</span><span data-i18n="legend_ref">из справочника, в строке нет</span></span>
           </div>
           <div class="flex items-center gap-3">
-            <span id="pagerInfo" class="font-mono text-[11px] text-slate-500"></span>
+            <span id="pagerInfo" class="font-mono text-[11px] text-neutral-500"></span>
             <button id="prevPage" type="button" class="icon-btn" aria-label="Предыдущая страница" data-i18n-attr="aria-label:prev_page">
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
@@ -420,7 +594,7 @@
       </article>
     </section>
 
-    <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-line/70 py-6 font-mono text-[11px] text-slate-600">
+    <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-line/70 py-6 font-mono text-[11px] text-neutral-600">
       <span><span data-i18n="footer_schema">схема</span> · id · raw_address · province · city · district · living_area · street_type · street_name · house · apartment · entrance · floor · landmark · confidence</span>
       <span id="footerApi"></span>
     </footer>
@@ -442,16 +616,16 @@
       <div class="space-y-6 p-6">
         <div class="rounded-2xl border border-line-strong bg-ink-950/60 p-4">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <span class="font-mono text-[10.5px] uppercase tracking-[0.14em] text-slate-500" data-i18n="ed_raw">raw_address · возвращается без изменений</span>
+            <span class="font-mono text-[10.5px] uppercase tracking-[0.14em] text-neutral-500" data-i18n="ed_raw">raw_address · возвращается без изменений</span>
             <div id="editorMeta" class="flex flex-wrap items-center gap-2"></div>
           </div>
-          <p id="editorRaw" class="mt-2.5 break-words font-mono text-[14px] leading-relaxed text-slate-100"></p>
+          <p id="editorRaw" class="mt-2.5 break-words font-mono text-[14px] leading-relaxed text-neutral-100"></p>
         </div>
         <div id="editorFields" class="grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3"></div>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line p-6 pt-5">
-        <p class="text-xs text-slate-500" data-i18n-html="ed_note">Сохранение отмечает запись как <span class="text-lime-300">подтверждённую</span> и ставит уверенность <span class="font-mono text-lime-300">1.00</span> · <kbd>Ctrl</kbd> + <kbd>Enter</kbd></p>
+        <p class="text-xs text-neutral-500" data-i18n-html="ed_note">Сохранение отмечает запись как <span class="text-lime-300">подтверждённую</span> и ставит уверенность <span class="font-mono text-lime-300">1.00</span> · <kbd>Ctrl</kbd> + <kbd>Enter</kbd></p>
         <div class="flex w-full flex-wrap gap-2 sm:w-auto">
           <button type="button" class="btn btn-ghost" data-close><span data-i18n="ed_cancel">Отмена</span></button>
           <button type="button" id="saveNextBtn" class="btn btn-ghost"></button>
@@ -471,10 +645,11 @@
     <option value="трасса"></option><option value="аллея"></option><option value="набережная"></option><option value="площадь"></option>
   </datalist>
 
+  <div id="chartTip" class="chart-tip" role="tooltip"></div>
   <div id="toasts" class="fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-2" aria-live="polite"></div>
 
   <noscript>
-    <p style="position:fixed;inset:auto 0 0 0;padding:12px;text-align:center;background:#16202c;color:#fbbf24">Для работы Jana Address нужен JavaScript · JavaScript қосулы болуы керек · JavaScript is required.</p>
+    <p style="position:fixed;inset:auto 0 0 0;padding:12px;text-align:center;background:#161a17;color:#ff7a45">Для работы Jana Address нужен JavaScript · JavaScript қосулы болуы керек · JavaScript is required.</p>
   </noscript>
 </body>
 </html>
