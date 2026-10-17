@@ -4,7 +4,7 @@
  * Jana Address — frontend controller (vanilla JS, no build step)
  *
  * Backend contract (FastAPI batch endpoint):
- *   POST  http://localhost:8000/api/parse
+ *   POST  /api/parse   (local: http://localhost:8000, deployed: Render, see render.yaml)
  *   body  [{ "id": "rec_00417", "raw_address": "..." }, ...]
  *   200   [{ id, raw_address, province, city, district, living_area, street_type,
  *            street_name, house, apartment, entrance, floor, landmark, confidence }, ...]
@@ -14,8 +14,23 @@
  * interface never dead-ends. Point at another server with ?api=http://host:port/api/parse
  * ========================================================================== */
 
+const LOCAL_API_URL = 'http://localhost:8000/api/parse';
+const DEPLOYED_API_URL = 'https://jana-address-api.onrender.com/api/parse';
+
+// ?api= wins; a page opened locally (localhost, 127.0.0.1, ::1, *.localhost, file://) uses the local
+// backend; anywhere else (e.g. Vercel) uses the Render deployment.
+function resolveApiUrl() {
+  if (typeof location === 'undefined') return LOCAL_API_URL;
+  const override = new URLSearchParams(location.search).get('api');
+  if (override) return override;
+  const host = location.hostname;
+  const isLocal = location.protocol === 'file:' || host === '' || host === 'localhost' || host.endsWith('.localhost')
+    || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+  return isLocal ? LOCAL_API_URL : DEPLOYED_API_URL;
+}
+
 const CONFIG = {
-  apiUrl: (typeof location !== 'undefined' && new URLSearchParams(location.search).get('api')) || 'http://localhost:8000/api/parse',
+  apiUrl: resolveApiUrl(),
   reviewThreshold: 0.7,
   pageSize: 50,
   probeTimeoutMs: 1500,

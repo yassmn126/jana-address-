@@ -1,0 +1,16 @@
+# Render Blueprint for the FastAPI backend (Dashboard → New → Blueprint → this repo).
+# Only api/ is deployed; the frontend lives on Vercel. The offline jury run still uses docker compose.
+services:
+  - type: web
+    name: jana-address-api          # → https://jana-address-api.onrender.com
+    runtime: docker
+    plan: free                      # sleeps after 15 min idle; ~1 min cold start; no persistent disk
+    region: frankfurt               # closest Render region to Kazakhstan; cannot be changed later
+    rootDir: api                    # pushes outside api/ don't trigger a redeploy
+    dockerfilePath: ./Dockerfile    # relative to rootDir → api/Dockerfile
+    dockerContext: .                # relative to rootDir → api/
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT                   # Render routes to $PORT (default 10000); the Dockerfile serves on 8000
+        value: "8000"
