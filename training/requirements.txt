@@ -9,6 +9,10 @@ protobuf>=4
 onnx>=1.16
 onnxruntime>=1.18
 scikit-learn>=1.4
-lightgbm>=4.3
+# lightgbm is no longer needed: training/calibrate.py uses scikit-learn and exports JSON
 numpy>=1.26,<3
 pyyaml>=6
+# gazetteer ETL (data_pipeline/build_gazetteer.py)
+osmium>=4.0
+shapely>=2.0
+matplotlib>=3.8

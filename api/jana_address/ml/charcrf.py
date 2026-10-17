@@ -284,7 +284,7 @@ class CharCrfRuntime:
 def build_gazetteer_sets(sqlite_path: str | None, lexicon=None) -> dict[str, list[str]]:
     """Name sets for the membership features (saved INTO model_meta.json, so training == inference)."""
     import sqlite3
-    from ..gazetteer.names import base_of_numbered, norm
+    from ..gazetteer.names import norm
     from ..rules.grammar import get_lexicon
 
     lex = lexicon or get_lexicon()

@@ -59,7 +59,7 @@ POLICY = _load_policy()
 
 def _ok(rp: RuleParse, field: str, start: int, end: int) -> bool:
     text = extract(rp.raw, start, end)
-    if not text:
+    if not text or not re.search(r"[^\W_]", text):        # «???», «-», «,» are never a value
         return False
     if field == "HOUSE":
         return bool(HOUSE_RE.match(text.replace(" ", "")))

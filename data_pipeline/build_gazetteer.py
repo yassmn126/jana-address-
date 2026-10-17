@@ -42,7 +42,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from jana_address.gazetteer.names import (  # noqa: E402
-    DISTRICT_WORDS, LIVING_KINDS, base_of_numbered, norm, split_district, split_living, split_street,
+    DISTRICT_WORDS, base_of_numbered, norm, split_district, split_living, split_street,
 )
 from jana_address.rules.grammar import get_lexicon  # noqa: E402
 
@@ -257,7 +257,6 @@ def province_mapper():
 
 
 def build(osm: dict, out: str, report_path: str | None) -> dict:
-    lex = get_lexicon()
     canon_province = province_mapper()
     rep: dict = {}
 

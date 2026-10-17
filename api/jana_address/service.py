@@ -74,6 +74,8 @@ def parse_one(id_: str, raw: str, explain: bool = False, mode: str | None = None
         conf = calibrated_confidence(rp.flags, fields, rp.meta.get("model_probs"), len(rp.tokens), raw)
         if conf is None:
             conf = confidence(rp.flags, fields)
+        if all(fields.get(k) is None for k in ("street_name", "house", "apartment", "city")):
+            conf = min(conf, 0.08)     # conventions: an unparseable string gets nulls and confidence ≤ 0.1
         out = {"id": id_, "raw_address": raw, **fields, "confidence": conf}
         if explain:
             out["spans"] = [

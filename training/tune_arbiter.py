@@ -28,11 +28,11 @@ from jana_address.assembly.canon import assemble  # noqa: E402
 from jana_address.gazetteer.enrich import enrich  # noqa: E402
 from jana_address.service import get_parser, get_tagger  # noqa: E402
 
-GRID = {
-    "tau_solo": [0.3, 0.5, 0.7, 0.9],
-    "tau_field": [0.5, 0.7, 0.85, 0.95],
-    "tau_override": [0.9, 0.97, 1.01],
-    "tau_weak": [0.3, 0.5, 0.7],
+GRID = {                         # 320 policies; deliberately coarse — the dev sets are small
+    "tau_solo": [0.3, 0.5, 0.7, 0.85],
+    "tau_field": [0.5, 0.65, 0.8, 0.9, 0.95],
+    "tau_override": [0.9, 0.95, 0.98, 1.01],
+    "tau_weak": [0.3, 0.45, 0.6, 0.75],
 }
 
 

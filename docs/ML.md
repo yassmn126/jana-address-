@@ -17,12 +17,12 @@ We do the same for Kazakhstan, and our generator applies the labeling convention
 
 | piece | file | what it does |
 |---|---|---|
-| Gazetteer ETL | `data_pipeline/build_gazetteer.py` | OSM PBF (225 MB) → `api/artifacts/gazetteer.sqlite` (16 MB) in ~90 s: 7.8k settlements (ru/kk/en names), 20 provinces, city districts (Алматы 8, Астана 6, Шымкент 5, Тараз 2; Караганда from the seed), 5.3k микрорайоны/ЖК, 50k streets split into type + name, house-level district for 868 streets that cross districts, 58k POIs |
+| Gazetteer ETL | `data_pipeline/build_gazetteer.py` | OSM PBF (225 MB) → `api/artifacts/gazetteer.sqlite` (16 MB) in ~90 s: 7.8k settlements (ru/kk/en names), 20 provinces, city districts (Алматы 8, Астана 6, Шымкент 5, Тараз 2; Караганда from the seed), 5.3k микрорайоны/ЖК, 50k streets split into type + name, house-level district for the 812 streets that cross districts, 58k POIs |
 | Synthetic generator | `training/synth_grammar.py` | 200k labeled addresses from real OSM names, covering every slide-9 difficulty: glued numbers, fractions/letters (from real OSM house numbers), Latin, микрорайон-number vs house, landmarks, KK/RU splices and Kazakh word order, duplicated city, district instead of city, typos, invisible characters, postcodes, phones |
-| Tagger | `training/train_charcrf.py` → `api/jana_address/ml/charcrf.py` | char-CNN + word embedding + token shape + 44 lexicon/gazetteer/context features → 2×BiLSTM(128) → CRF over 23 BIO labels. 2.1 M params, **ONNX ≈ 4 MB**, trains on a laptop CPU (~3.5 min/epoch on 200k rows) |
+| Tagger | `training/train_charcrf.py` → `api/jana_address/ml/charcrf.py` | char-CNN + word embedding + token shape + 44 lexicon/gazetteer/context features → 2×BiLSTM(128) → CRF over 23 BIO labels. 2.4 M params, **ONNX 9.5 MB**, trains on a laptop CPU (~4.7 min/epoch on 200k rows) |
 | Decoding | `ml/charcrf.py` | Viterbi with hard BIO constraints; forward–backward marginals give per-token probabilities to the arbiter and the confidence model |
 | Arbiter | `assembly/arbiter.py` + `training/tune_arbiter.py` | per-field policy: agreement → accept; conflict → the model needs prob ≥ τ (lower against the grammar's positional guesses, higher against keyword-bound numbers); thresholds grid-searched on the jury metric → `api/artifacts/arbiter_policy.json` |
-| Confidence | `training/calibrate.py` → `confidence/heuristic.py` | logistic regression on 100+ parser/arbiter/model/gazetteer features + isotonic calibration, exported as JSON (numpy-only at runtime); ECE, reliability plot, review-budget table |
+| Confidence | `training/calibrate.py` → `confidence/heuristic.py` | logistic regression on 109 parser/arbiter/model/gazetteer features + isotonic calibration, exported as JSON (numpy-only at runtime); ECE, reliability plot, review-budget table |
 | Self-training | `training/pseudo_label.py` | rules and model label `train.json` offline. Where they agree with high confidence the result becomes a silver label; disagreements go to the review UI (same JSONL shape as `label_llm.py`) |
 | A/B | `eval/ab.py` | jury-metric replica for rules vs model vs hybrid on any gold file |
 
@@ -33,7 +33,26 @@ region and dozens of villages, so province stays null unless the string or the d
 
 ## 2. Results
 
-RESULTS_TABLE
+Jury-metric replica (`eval/metric.py`, strict), `make ab`. Model = v3 char-CRF, 200k synthetic rows, 6 epochs (29 min on an M4 CPU).
+
+| gold set | n | rules | model only | **hybrid** | all-4-address-fields per record (rules → hybrid) |
+|---|---|---|---|---|---|
+| `test_handmade` — **held out, never tuned on** | 89 | 96.50 | 99.64 | **99.64** | 86.4 % → 97.7 % |
+| `dev_handmade` | 139 | 96.96 | 100.00 | **100.00** | 90.6 % → 100 % |
+| `conventions_examples` | 42 | 100.00 | 100.00 | **100.00** | 100 % → 100 % |
+| synthetic dev (other seed, in-distribution) | 5 000 | 90.59 | 99.57 | **99.57** | 76.4 % → 97.9 % |
+
+Per field on the held-out set, rules → hybrid: city 0.911 → 0.987, street_name 0.907 → 1.000, apartment 0.927 → 1.000.
+Its two remaining errors are both ambiguous. «Байконыр» was mapped to «Байконур» (Kazakh name without Kazakh letters,
+convention Q2, while the label keeps it as written). «5мкр 12д 34кв» gave house «12д»: one token, a house literal, or «12 дом»?
+
+* **Speed:** 0.7 ms/record end to end (rules + tagger + arbiter + gazetteer + confidence). 1 000 records take 0.73 s; the limit is 300 s.
+* **Confidence:** ECE 0.0015 out-of-fold, 0.008 on the held-out set. Review budget: auto-accepting all records gives 98.0 %
+  address-block accuracy, sending the 10 % least confident to a human gives 99.0 % on the rest
+  (`api/artifacts/calibrator.json`, plot in `calibrator.png`).
+* **Arbiter:** the tuned policy leans on the model (τ_field 0.5, τ_weak 0.3, τ_solo 0.3). Numbers bound to an explicit keyword
+  («кв 70», «4подьезд») still need the model at ≥ 0.9 to override the rule.
+* **Artifacts:** `model.onnx` 9.5 MB + `model_meta.json` 0.9 MB, ONNX ≡ PyTorch (max |Δ emission| 9e-6).
 
 `dev_handmade` (139) and `test_handmade` (89) are realistic addresses written and labeled by hand
 before the generator existed. `test_handmade` was never used for tuning anything. `conventions_examples` (42)

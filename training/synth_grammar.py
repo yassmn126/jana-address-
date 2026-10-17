@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "api"))
 
-from jana_address.gazetteer.names import base_of_numbered, norm, split_living  # noqa: E402
+from jana_address.gazetteer.names import base_of_numbered  # noqa: E402
 from jana_address.preprocess import clean  # noqa: E402
 from jana_address.rules.grammar import get_lexicon  # noqa: E402
 from jana_address.tokenizer import tokenize  # noqa: E402
@@ -56,7 +56,7 @@ KW = {
     "district_after": [("район", 30), ("р-н", 25), ("р-н.", 4), ("р/н", 2), ("района", 1)],
     "district_before": [("район", 10), ("р-н", 6)],
     "province_after": [("область", 30), ("обл.", 20), ("обл", 15)],
-    "house": [("д.", 30), ("дом", 25), ("д", 10), ("уй", 1), ("dom", 2), ("д .", 1)],
+    "house": [("д.", 30), ("дом", 25), ("д", 10), ("уй", 1), ("dom", 2), ("д .", 1), ("уч.", 1), ("участок", 1), ("зд.", 1)],
     "apartment": [("кв.", 30), ("кв", 35), ("квартира", 10), ("кв-ра", 1), ("kv", 4), ("kv.", 2), ("flat", 2),
                   ("apt", 1), ("оф.", 3), ("офис", 3), ("каб.", 1)],
     "entrance": [("подъезд", 30), ("подьезд", 12), ("под.", 6), ("п-д", 4), ("подезд", 2), ("п.", 2), ("entrance", 1)],
@@ -242,7 +242,9 @@ def kw_num(r: Rec, kw: str, num: str, field: str, kw_first_p: float, glue_p: flo
     glue = rnd.random() < glue_p
     if rnd.random() < kw_first_p:
         r.add(kw)
-        if not glue or not re.search(r"[^\W\d_]$", kw):
+        if rnd.random() < 0.04:                       # «д. №12», «кв.№5»
+            r.add(rnd.choice([" №", "№", " № "]))
+        elif not glue or not re.search(r"[^\W\d_]$", kw):
             r.add(" " if not kw.endswith(".") or rnd.random() < 0.6 else "")
         r.add(num, field)
     else:
@@ -280,7 +282,15 @@ def typo(word: str, rnd: random.Random) -> str:
     return word[:i] + word[i + 1] + word[i] + word[i + 2:]
 
 
+JUNK = ["самовывоз", "до востребования", "адрес уточнить", "нет", "-", "???", "...", "позвонить", "тест",
+        "оставить на почте", "Казахстан", "РК", "доставка курьером", "N/A", "0"]
+
+
 def build_record(p: Pools, rnd: random.Random) -> Rec:
+    if rnd.random() < 0.004:                     # unparseable input: every token is O (convention 6)
+        r = Rec(rnd, {"sep": ", "})
+        r.add(rnd.choice(JUNK))
+        return r
     kk = rnd.random() < 0.15                     # Kazakh keywords and word order
     latin = (not kk) and rnd.random() < 0.05
     style = {"sep": wpick(rnd, [(", ", 70), (" ", 18), (",", 10), (". ", 2)])}
@@ -289,7 +299,6 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
     city = p.city()
     is_rep = city["name"] in REPUBLICAN
     is_village = city["place"] == "village"
-    blocks: list[tuple[str, callable]] = []
 
     # ---- province
     def province_block():
@@ -348,6 +357,8 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
                 r.add(written, "city"); r.add(rnd.choice(["/", " / ", "/"])); r.add(city["kk"]); r.sp(); r.add("қаласы")
             elif x < 0.60 and not latin:
                 r.add(written, "city"); r.add(rnd.choice([" ", ", "])); r.add(written if rnd.random() < 0.8 else written.upper())
+            elif x < 0.63 and not latin:
+                r.add(written, "city"); r.add(rnd.choice([" г.", " г", " қ.", " город"]))       # «Алматы г.»
             else:
                 if rnd.random() < 0.06:
                     written = written.lower() if rnd.random() < 0.6 else written.upper()
@@ -381,8 +392,6 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             r.add(name, "district"); r.sp(); r.add(wpick(rnd, KW["district_after"]))
         else:
             r.add(wpick(rnd, KW["district_before"])); r.sp(); r.add(name, "district")
-        if name.endswith(("ский", "кий")) is False and rnd.random() < 0.0:
-            pass
         g["district"] = name
         return True
 
@@ -493,8 +502,7 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             r.add("" if use_num and rnd.random() < 0.3 else " ")
             r.add(wpick(rnd, STREET_KW_AFTER[lemma]), "street_type")
         g["street_type"], g["street_name"] = lemma, name
-        # «Аксай 3а» needs the house to be clearly separated (comma or keyword): convention rule 2
-        return True
+        return True       # house_block separates the house by a comma or keyword (convention rule 2)
 
     # ---- house and details
     def house_block(after_street: bool):
@@ -632,12 +640,14 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         landmark_block()
     if city_at_end:
         r.sep(); city_block()
+    if rnd.random() < 0.015 and r.pieces:            # phone between two components («…, тел 8701…, …»)
+        cuts = [i + 1 for i, (t, f) in enumerate(r.pieces[:-1]) if f is None and t.strip() in (",", ";")]
+        if cuts:
+            r.pieces.insert(rnd.choice(cuts), [f"тел {rnd.choice(['8', '+7'])}70{rnd.randint(10000000, 99999999)}, ", None])
     if rnd.random() < 0.04:
         tail = rnd.choice(NOISE_TAIL).format(d2=rnd.randint(10, 99), d3=rnd.randint(100, 999), d4=rnd.randint(1000, 9999),
                                               d7=rnd.randint(1000000, 9999999), d9=rnd.randint(100000000, 999999999))
         r.sep(); r.add(tail)
-    if not want_city and not district_only and g["province"] is None:
-        pass
     if not living_written["on"]:
         g["living_area"] = None
     return r
@@ -667,11 +677,8 @@ def noise(r: Rec, rnd: random.Random) -> None:
             if pc[1] is None and pc[0] == " ":
                 pc[0] = "  "
                 break
-    if rnd.random() < 0.03:                  # leading/trailing junk
+    if rnd.random() < 0.03:                  # leading junk
         ps.insert(0, [rnd.choice([" ", "﻿", "-", "  "]), None])
-    # gold follows case changes of values (jury lowercases anyway, but keep exactness)
-    for f in FIELDS:
-        pass
 
 
 def render(r: Rec) -> tuple[str, dict[str, tuple[int, int]]]:
@@ -686,6 +693,14 @@ def render(r: Rec) -> tuple[str, dict[str, tuple[int, int]]]:
                 spans[f] = (pos, pos + len(text))
         raw += text
         pos += len(text)
+    # keyword spans end before a trailing dot («ул.» → «ул», «обл.» → «обл»): same convention as the rule grammar,
+    # so real labels (built from rule spans) and synthetic labels agree token by token
+    for f in ("street_type", "province"):
+        if f in spans:
+            a, b = spans[f]
+            while b > a + 1 and raw[b - 1] in ". ":
+                b -= 1
+            spans[f] = (a, b)
     return raw, spans
 
 

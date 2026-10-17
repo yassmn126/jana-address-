@@ -71,6 +71,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default="api/artifacts/calibrator.json")
     ap.add_argument("--plot", action="store_true")
     ap.add_argument("--C", type=float, default=0.5)
+    ap.add_argument("--eval-gold", action="append", default=[], help="held-out gold: report ECE / accuracy, not used to fit")
     a = ap.parse_args(argv)
 
     import numpy as np
@@ -123,6 +124,23 @@ def main(argv=None) -> int:
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
     print(f"→ {a.out}")
+    held = {}
+    for path in a.eval_gold:
+        ps, ys = [], []
+        for g in load_gold(path):
+            p = parse_one(g["id"], g["raw_address"], explain=True)
+            xs = (np.array(featurize(p["flags"], p, p.get("model_probs"), len(p["tokens"]), g["raw_address"])) - mean) / scale
+            z = float(xs @ clf.coef_[0] + clf.intercept_[0])
+            ps.append(float(np.interp(1 / (1 + np.exp(-z)), out["iso_x"], out["iso_y"])))
+            ys.append(target(p, g))
+        ps, ys = np.array(ps), np.array(ys)
+        _, e = reliability(ps, ys)
+        held[Path(path).stem] = {"n": int(len(ys)), "accuracy": round(float(ys.mean()), 4),
+                                 "mean_confidence": round(float(ps.mean()), 4), "ece": round(e, 4)}
+        print(f"held-out {Path(path).stem}: n={len(ys)} acc={ys.mean():.4f} mean conf={ps.mean():.4f} ECE={e:.4f}")
+    if held:
+        out["held_out"] = held
+        Path(a.out).write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
     if a.plot:
         import matplotlib
         matplotlib.use("Agg")
