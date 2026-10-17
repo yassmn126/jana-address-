@@ -25,3 +25,9 @@ api/artifacts/tokenizer.json
 runs/
 # secrets
 .env
+
+# OSM extract (225 MB) and local eval outputs
+data/osm/
+out_*.json
+errors_*.md
+data/dataset/

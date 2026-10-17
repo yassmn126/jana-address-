@@ -28,15 +28,18 @@ def _params():
 
 @pytest.mark.parametrize("ex", list(_params()))
 def test_scored_fields(ex):
-    out = parse_one(ex["id"], ex["raw_address"])
+    out = parse_one(ex["id"], ex["raw_address"], explain=True)
     exp = ex["expected"]
     enrich = ex.get("enrichment", {})
     mismatches = []
     for f in SCORED:
         got, want = norm(out.get(f)), norm(exp.get(f))
         if want is None and f in ("province", "city", "district", "living_area"):
-            # gazetteer may fill it: accept null OR the enrichment value
-            if got is not None and got != norm(enrich.get(f)):
+            # not in the string: the gazetteer may fill it (the jury does not score it). Accept null, the
+            # documented enrichment value, or any value whose provenance is the gazetteer — but never a
+            # value cut from the string where the label says there is none.
+            from_gz = str(out["provenance"].get(f) or "").startswith("gazetteer")
+            if got is not None and got != norm(enrich.get(f)) and not from_gz:
                 mismatches.append((f, out.get(f), f"null or {enrich.get(f)!r}"))
             continue
         if got != want:
@@ -47,9 +50,11 @@ def test_scored_fields(ex):
 @pytest.mark.parametrize("ex", list(_params()))
 def test_unscored_fields_soft(ex):
     """street_type / landmark are not in the jury metric but are judged at the defense."""
-    out = parse_one(ex["id"], ex["raw_address"])
+    out = parse_one(ex["id"], ex["raw_address"], explain=True)
     exp = ex["expected"]
     for f in ("street_type", "landmark"):
+        if exp.get(f) is None and str(out["provenance"].get(f) or "").startswith("gazetteer"):
+            continue                     # «Кулманова 133» → улица from the gazetteer: enrichment, not parsing
         assert norm(out.get(f)) == norm(exp.get(f)), f"{f}: got {out.get(f)!r}, want {exp.get(f)!r}"
 
 

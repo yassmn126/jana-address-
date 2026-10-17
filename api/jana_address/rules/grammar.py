@@ -364,6 +364,7 @@ class RuleParser:
             if fieldname in rp.spans:
                 rp.flags.append(f"duplicate_{fieldname.lower()}")
                 toks[kw].label = "O"
+                pending.discard(kw)          # without this the fixpoint loop below never terminates
                 return
             self._set(rp, fieldname, toks, idxs, f"kw_{direction}", 0.95 if direction == "glued" else 0.9)
             toks[kw].label = "O"
