@@ -1,0 +1,152 @@
+# SEED gazetteer. Purpose: make the rule grammar useful on day 0 and define the
+# interface the real gazetteer (OSM + KATO ETL → gazetteer.sqlite) must implement.
+# Everything here must be re-verified against KATO/OSM by the ETL; entries marked
+# `verify: true` are from memory and may be wrong.
+#
+# `name` is the Russian name as it appears in Jana Post strings; `kk` the Kazakh name;
+# `aliases` are other spellings (old names, Latin, typos) — all matched on the matching view.
+
+cities:
+  # --- cities of republican significance ---
+  - {name: Астана, kk: Астана, province: Астана, aliases: [нур-султан, нур султан, astana, nur-sultan, nursultan, целиноград]}
+  - {name: Алматы, kk: Алматы, province: Алматы, aliases: [almaty, алма-ата, алмата, алмаата]}
+  - {name: Шымкент, kk: Шымкент, province: Шымкент, aliases: [shymkent, чимкент]}
+  # --- regional centres ---
+  - {name: Кокшетау, kk: Көкшетау, province: Акмолинская область, aliases: [kokshetau, кокчетав]}
+  - {name: Актобе, kk: Ақтөбе, province: Актюбинская область, aliases: [aktobe, актюбинск]}
+  - {name: Конаев, kk: Қонаев, province: Алматинская область, aliases: [капшагай, қапшағай, kapshagay, konaev, qonaev]}
+  - {name: Атырау, kk: Атырау, province: Атырауская область, aliases: [atyrau, гурьев]}
+  - {name: Усть-Каменогорск, kk: Өскемен, province: Восточно-Казахстанская область, aliases: [оскемен, өскемен, ust-kamenogorsk, oskemen, усть каменогорск]}
+  - {name: Тараз, kk: Тараз, province: Жамбылская область, aliases: [taraz, джамбул, жамбыл]}
+  - {name: Талдыкорган, kk: Талдықорған, province: область Жетісу, aliases: [талдыкурган, талдықорған, taldykorgan]}
+  - {name: Уральск, kk: Орал, province: Западно-Казахстанская область, aliases: [орал, oral, uralsk]}
+  - {name: Караганда, kk: Қарағанды, province: Карагандинская область, aliases: [қарағанды, караганды, karaganda, qaragandy]}
+  - {name: Костанай, kk: Қостанай, province: Костанайская область, aliases: [кустанай, қостанай, kostanay, kostanai]}
+  - {name: Кызылорда, kk: Қызылорда, province: Кызылординская область, aliases: [қызылорда, kyzylorda, qyzylorda]}
+  - {name: Актау, kk: Ақтау, province: Мангистауская область, aliases: [ақтау, aktau, шевченко]}
+  - {name: Павлодар, kk: Павлодар, province: Павлодарская область, aliases: [pavlodar]}
+  - {name: Петропавловск, kk: Петропавл, province: Северо-Казахстанская область, aliases: [петропавл, petropavlovsk]}
+  - {name: Туркестан, kk: Түркістан, province: Туркестанская область, aliases: [түркістан, turkestan, turkistan]}
+  - {name: Семей, kk: Семей, province: область Абай, aliases: [семипалатинск, semey]}
+  - {name: Жезказган, kk: Жезқазған, province: область Ұлытау, aliases: [жезқазған, zhezkazgan, джезказган]}
+  # --- other cities / towns ---
+  - {name: Темиртау, kk: Теміртау, province: Карагандинская область, aliases: [теміртау, temirtau]}
+  - {name: Экибастуз, kk: Екібастұз, province: Павлодарская область, aliases: [екібастұз, ekibastuz]}
+  - {name: Рудный, kk: Рудный, province: Костанайская область, aliases: [rudny]}
+  - {name: Жанаозен, kk: Жаңаөзен, province: Мангистауская область, aliases: [жаңаөзен, zhanaozen, новый узень]}
+  - {name: Балхаш, kk: Балқаш, province: Карагандинская область, aliases: [балқаш, balkhash]}
+  - {name: Кентау, kk: Кентау, province: Туркестанская область, aliases: [kentau]}
+  - {name: Каскелен, kk: Қаскелең, province: Алматинская область, aliases: [қаскелең, kaskelen]}
+  - {name: Талгар, kk: Талғар, province: Алматинская область, aliases: [талғар, talgar]}
+  - {name: Сатпаев, kk: Сәтбаев, province: область Ұлытау, aliases: [сәтбаев, satpayev, никольский]}
+  - {name: Степногорск, kk: Степногорск, province: Акмолинская область, aliases: [stepnogorsk]}
+  - {name: Риддер, kk: Риддер, province: Восточно-Казахстанская область, aliases: [лениногорск, ridder]}
+  - {name: Аксу, kk: Ақсу, province: Павлодарская область, aliases: [ақсу, aksu]}
+  - {name: Кульсары, kk: Құлсары, province: Атырауская область, aliases: [құлсары, kulsary]}
+  - {name: Сарань, kk: Саран, province: Карагандинская область, aliases: [саран, saran]}
+  - {name: Шахтинск, kk: Шахтинск, province: Карагандинская область, aliases: [shakhtinsk]}
+  - {name: Косшы, kk: Қосшы, province: Акмолинская область, aliases: [қосшы, косшы, kosshy]}
+  - {name: Щучинск, kk: Щучинск, province: Акмолинская область, aliases: [shchuchinsk]}
+  - {name: Лисаковск, kk: Лисаковск, province: Костанайская область, aliases: [lisakovsk]}
+  - {name: Аркалык, kk: Арқалық, province: Костанайская область, aliases: [арқалық, arkalyk]}
+  - {name: Байконур, kk: Байқоңыр, province: Кызылординская область, aliases: [байқоңыр, baikonur, байконыр]}
+  - {name: Жетысай, kk: Жетісай, province: Туркестанская область, aliases: [жетісай, zhetysay]}
+  - {name: Сарыагаш, kk: Сарыағаш, province: Туркестанская область, aliases: [сарыағаш, saryagash]}
+  - {name: Арысь, kk: Арыс, province: Туркестанская область, aliases: [арыс, arys]}
+  - {name: Шу, kk: Шу, province: Жамбылская область, aliases: [чу, shu]}
+  - {name: Есик, kk: Есік, province: Алматинская область, aliases: [есік, иссык, esik]}
+  - {name: Жаркент, kk: Жаркент, province: область Жетісу, aliases: [zharkent, панфилов]}
+  - {name: Текели, kk: Текелі, province: область Жетісу, aliases: [текелі, tekeli]}
+  - {name: Аягоз, kk: Аягөз, province: область Абай, aliases: [аягөз, аягуз, ayagoz]}
+  - {name: Курчатов, kk: Курчатов, province: область Абай, aliases: [kurchatov]}
+  - {name: Алтай, kk: Алтай, province: Восточно-Казахстанская область, aliases: [зыряновск, altai]}
+  - {name: Атбасар, kk: Атбасар, province: Акмолинская область, aliases: [atbasar]}
+  - {name: Хромтау, kk: Хромтау, province: Актюбинская область, aliases: [khromtau]}
+  - {name: Кандыагаш, kk: Қандыағаш, province: Актюбинская область, aliases: [қандыағаш, kandyagash, октябрьск]}
+  - {name: Шалкар, kk: Шалқар, province: Актюбинская область, aliases: [шалқар, челкар, shalkar]}
+  - {name: Алга, kk: Алға, province: Актюбинская область, aliases: [алға, alga]}
+  - {name: Житикара, kk: Жітіқара, province: Костанайская область, aliases: [жітіқара, джетыгара, zhitikara]}
+  - {name: Тобыл, kk: Тобыл, province: Костанайская область, aliases: [затобольск, tobyl]}
+  - {name: Форт-Шевченко, kk: Форт-Шевченко, province: Мангистауская область, aliases: [форт шевченко]}
+  - {name: Каратау, kk: Қаратау, province: Жамбылская область, aliases: [қаратау, karatau]}
+  - {name: Жанатас, kk: Жаңатас, province: Жамбылская область, aliases: [жаңатас, zhanatas]}
+  - {name: Каражал, kk: Қаражал, province: область Ұлытау, aliases: [қаражал, karazhal]}
+  - {name: Приозерск, kk: Приозерск, province: Карагандинская область, aliases: [приозёрск, priozersk]}
+  - {name: Абай, kk: Абай, province: Карагандинская область, aliases: [abai city], note: "city in Karaganda region — not the region «область Абай»"}
+  - {name: Макинск, kk: Макинск, province: Акмолинская область, aliases: [makinsk]}
+  - {name: Ерейментау, kk: Ерейментау, province: Акмолинская область, aliases: [ereymentau, ерментау]}
+  - {name: Шемонаиха, kk: Шемонаиха, province: Восточно-Казахстанская область, aliases: [shemonaikha]}
+  - {name: Зайсан, kk: Зайсан, province: Восточно-Казахстанская область, aliases: [zaisan]}
+  - {name: Тайынша, kk: Тайынша, province: Северо-Казахстанская область, aliases: [tayynsha, тайнша]}
+  - {name: Булаево, kk: Булаево, province: Северо-Казахстанская область, aliases: [bulaevo]}
+  - {name: Мамлютка, kk: Мамлютка, province: Северо-Казахстанская область, aliases: [mamlyutka]}
+  - {name: Сергеевка, kk: Сергеевка, province: Северо-Казахстанская область, aliases: [sergeevka]}
+  - {name: Державинск, kk: Державинск, province: Акмолинская область, aliases: [derzhavinsk]}
+  - {name: Эмба, kk: Ембі, province: Актюбинская область, aliases: [ембі, emba]}
+  - {name: Ушарал, kk: Үшарал, province: область Жетісу, aliases: [үшарал, usharal]}
+  - {name: Уштобе, kk: Үштөбе, province: область Жетісу, aliases: [үштөбе, ushtobe]}
+  - {name: Сарканд, kk: Сарқан, province: область Жетісу, aliases: [сарқан, sarkand]}
+  - {name: Ленгер, kk: Леңгір, province: Туркестанская область, aliases: [леңгір, lenger]}
+  - {name: Шардара, kk: Шардара, province: Туркестанская область, aliases: [chardara, shardara]}
+  - {name: Казалинск, kk: Қазалы, province: Кызылординская область, aliases: [қазалы, kazalinsk]}
+  - {name: Аральск, kk: Арал, province: Кызылординская область, aliases: [арал, aralsk]}
+  - {name: Акколь, kk: Ақкөл, province: Акмолинская область, aliases: [ақкөл, akkol]}
+  # --- settlements around Almaty that appear as "city" in delivery strings (brief: «Боралдай») ---
+  - {name: Боралдай, kk: Боралдай, province: Алматинская область, district: Илийский, aliases: [бурундай, boraldai, boraldaj], verify: true}
+  - {name: Отеген батыр, kk: Өтеген батыр, province: Алматинская область, district: Илийский, aliases: [өтеген батыр, отеген-батыр, энергетический], verify: true}
+  - {name: Байсерке, kk: Байсерке, province: Алматинская область, district: Илийский, aliases: [bayserke], verify: true}
+  - {name: Туздыбастау, kk: Тұздыбастау, province: Алматинская область, district: Талгарский, aliases: [тұздыбастау], verify: true}
+  - {name: Бесагаш, kk: Бесағаш, province: Алматинская область, district: Талгарский, aliases: [бесағаш], verify: true}
+  - {name: Кыргауылды, kk: Қырғауылды, province: Алматинская область, district: Карасайский, aliases: [қырғауылды, кыргаулды], verify: true}
+  - {name: Жетыген, kk: Жетіген, province: Алматинская область, district: Илийский, aliases: [жетіген], verify: true}
+  - {name: Коксай, kk: Көксай, province: Алматинская область, district: Карасайский, aliases: [көксай], verify: true}
+  - {name: Иргели, kk: Іргелі, province: Алматинская область, district: Карасайский, aliases: [іргелі], verify: true}
+  - {name: Абай, kk: Абай, province: Алматинская область, district: Карасайский, aliases: [], verify: true, note: "village near Kaskelen; collides with the city Абай and the region"}
+
+# City districts (городские районы). Used to (1) recognize district names in strings,
+# (2) resolve city from a district when the city is missing, (3) seed the ETL.
+city_districts:
+  Алматы:   [Алатауский, Алмалинский, Ауэзовский, Бостандыкский, Жетысуский, Медеуский, Наурызбайский, Турксибский]
+  Астана:   [Алматы, Байконур, Есиль, Нура, Сарыарка]          # Нура added 2024 — verify
+  Шымкент:  [Абайский, Аль-Фарабийский, Енбекшинский, Каратауский, Туран]
+  Караганда: [Казыбек би, Октябрьский]                        # «район имени Казыбек би»
+# Kazakh forms of city districts (string may contain them)
+city_districts_kk:
+  Алматы:   {Алатау: Алатауский, Алмалы: Алмалинский, Әуезов: Ауэзовский, Ауэзов: Ауэзовский, Бостандық: Бостандыкский,
+             Жетісу: Жетысуский, Медеу: Медеуский, Наурызбай: Наурызбайский, Түрксіб: Турксибский}
+  Астана:   {Алматы: Алматы, Байқоңыр: Байконур, Есіл: Есиль, Нұра: Нура, Сарыарқа: Сарыарка}
+  Шымкент:  {Абай: Абайский, Әл-Фараби: Аль-Фарабийский, Еңбекші: Енбекшинский, Қаратау: Каратауский, Тұран: Туран}
+
+# Microdistrict → city district (Almaty). SEED ONLY — the ETL replaces this with
+# OSM place polygons joined to district boundaries. Numbered variants ("Аксай-3а")
+# are matched by the base name.
+microdistricts:
+  Алматы:
+    Аксай:      {district: Ауэзовский}
+    Жетысу:     {district: Ауэзовский}
+    Мамыр:      {district: Ауэзовский}
+    Таугуль:    {district: Ауэзовский}
+    Сайран:     {district: Ауэзовский}
+    Дорожник:   {district: Ауэзовский}
+    Достык:     {district: Ауэзовский, verify: true}
+    Орбита:     {district: Бостандыкский}
+    Коктем:     {district: Бостандыкский}
+    Алмагуль:   {district: Бостандыкский}
+    Казахфильм: {district: Бостандыкский}
+    Самал:      {district: Медеуский, verify: true}          # Самал-1/2; Самал-3 may differ
+    Айнабулак:  {district: Жетысуский}
+    Шанырак:    {district: Алатауский}
+    Алгабас:    {district: Алатауский}
+    Нуркент:    {district: Алатауский}
+    Зердели:    {district: Алатауский, verify: true}
+    Тастак:     {district: Алмалинский, verify: true}
+    Калкаман:   {district: Наурызбайский, verify: true}
+  Караганда:
+    Пришахтинск: {district: Октябрьский, verify: true}       # жилой массив, brief example for living_area
+    Майкудук:    {district: Октябрьский, verify: true}
+    Юго-Восток:  {district: Казыбек би, verify: true}
+    Михайловка:  {district: Казыбек би, verify: true}
+  Актобе:
+    Батыс-2:     {district: null, verify: true}
+    Авиагородок: {district: null, verify: true}
+    Жанаконыс:   {district: null, verify: true}

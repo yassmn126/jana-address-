@@ -1,0 +1,25 @@
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+# node
+web/node_modules/
+web/dist/
+# outputs
+out.json
+errors.md
+jana-address-images.tar
+# hackathon data: must not leave the hackathon (brief) — never commit it
+data/train.json
+data/labels_*.jsonl
+data/corrections.jsonl
+data/dev_gold.json
+data/test_gold.json
+# big artifacts (use LFS or CI)
+api/artifacts/*.onnx
+api/artifacts/*.sqlite
+api/artifacts/*.pkl
+api/artifacts/tokenizer.json
+# secrets
+.env

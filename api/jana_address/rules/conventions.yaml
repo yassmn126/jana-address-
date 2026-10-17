@@ -1,0 +1,17 @@
+# Convention switches — one place to flip when the organizers answer docs/CONVENTIONS.md questions.
+# Every switch is read by assembly/canon.py; tests in api/tests/test_golden.py assume these defaults.
+
+# Q7: «12 корпус 2» / «12 блок А» → house = "12" + join + "2". null → ignore the building part (house = "12").
+house_building_join: "/"
+
+# Q6: living_area for «ЖК Томирис»: false → "Томирис" (as in the brief's example), true → "ЖК Томирис".
+living_area_keep_type_word: false
+
+# Q2: Kazakh-only city («Қарағанды қаласы») → Russian name from the gazetteer when known.
+city_kk_to_ru: true
+
+# Kazakh-only district («Әуезов ауданы») → Russian name («Ауэзовский») when known. false = as written.
+district_kk_to_ru: false
+
+# «оф. 12» / «каб. 5» → apartment.
+office_as_apartment: true

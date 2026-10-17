@@ -1,0 +1,14 @@
+# Training / export environment (GPU box or Colab). NOT installed in the Docker image.
+torch>=2.2
+transformers>=4.45,<5
+datasets>=2.20
+accelerate>=0.33
+seqeval>=1.2.2
+sentencepiece>=0.2.0
+protobuf>=4
+onnx>=1.16
+onnxruntime>=1.18
+scikit-learn>=1.4
+lightgbm>=4.3
+numpy>=1.26,<3
+pyyaml>=6

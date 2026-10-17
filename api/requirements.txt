@@ -1,0 +1,11 @@
+# Runtime (inside the Docker image). Keep it small: no torch here — the tagger ships as ONNX.
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pyyaml==6.0.2
+python-multipart==0.0.19
+rapidfuzz==3.10.1
+numpy>=1.26,<3
+# ML tagger runtime (artifacts from training/export_onnx.py; the service runs on rules when they are absent)
+onnxruntime==1.20.1
+tokenizers==0.21.0

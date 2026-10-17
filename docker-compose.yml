@@ -1,0 +1,32 @@
+services:
+  api:
+    build: ./api
+    image: jana-address-api:latest
+    container_name: jana-address-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - corrections:/data            # manual corrections (training data only)
+    environment:
+      - JANA_DATA_DIR=/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if b'ok' in urllib.request.urlopen('http://127.0.0.1:8000/health').read() else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 18
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    image: jana-address-web:latest
+    container_name: jana-address-web
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  corrections:
