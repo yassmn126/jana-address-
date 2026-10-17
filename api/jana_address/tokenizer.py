@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 LETTERS = "A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі"
 _LET = f"[{LETTERS}]"
 _TOKEN_RE = re.compile(
-    rf"(?P<word>{_LET}+(?:-(?:{_LET}|[0-9])+)*)"   # letters, hyphen-joined chunks
+    rf"(?P<word>(?<![0-9]){_LET}+(?:-(?:{_LET}|[0-9])+)*|{_LET}+)"   # letters, hyphen-joined chunks (not after a digit: «52а-18»)
     rf"|(?P<num>[0-9]+)"
     rf"|(?P<punct>[^\s])"
 )

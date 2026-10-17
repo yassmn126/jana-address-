@@ -129,18 +129,28 @@ class Gazetteer:
         if len(key) < 5:
             return None
         limit = 1 if len(key) < 9 else 2
-        best, best_d, ties = None, limit + 1, 0
-        for k, name, prov in self._city_names():
-            if abs(len(k) - len(key)) > limit:
-                continue
-            d = _osa(key, k, limit)
-            if d < best_d:
-                best, best_d, ties = (name, prov), d, 0
-            elif d == best_d:
-                ties += 1
-        if best is None or best_d == 0 or ties:
+        names = self._city_names()
+        try:
+            from rapidfuzz.distance import OSA
+            from rapidfuzz.process import extract
+            hits = extract(key, [k for k, _, _ in names], scorer=OSA.distance, score_cutoff=limit, limit=3)
+            scored = [(d, i) for _, d, i in hits]
+        except ImportError:                                     # pure-Python fallback (same semantics, slower)
+            scored = []
+            for i, (k, _, _) in enumerate(names):
+                if abs(len(k) - len(key)) <= limit:
+                    d = _osa(key, k, limit)
+                    if d <= limit:
+                        scored.append((d, i))
+        if not scored:
             return None
-        return {"name": best[0], "province": best[1], "distance": best_d}
+        scored.sort()
+        best_d, i = scored[0]
+        if best_d == 0 or (len(scored) > 1 and scored[1][0] == best_d):
+            return None                                         # exact match (not a typo) or a tie
+        if key in (names[i][0] + "а", names[i][0] + "ва"):
+            return None                                         # «Сатпаева» is the street (genitive), not the town Сатпаев
+        return {"name": names[i][1], "province": names[i][2], "distance": best_d}
 
     def city_ru(self, written: str | None):
         """Kazakh spelling of a settlement → its Russian name («Қарағанды» → «Караганда», «Орал» → «Уральск»)."""

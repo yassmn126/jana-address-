@@ -224,6 +224,12 @@ class Rec:
         self.gold = {f: None for f in FIELDS}
         self.city_mapped = False              # Kazakh spelling written, Russian name in gold (Q2)
         self.house_join = ""                  # «12 корпус 2» → gold «12/2» (Q7)
+        self.triple = False                   # «Актау, 12-5-7» wrote микрорайон-house-apartment already
+
+    def sepn(self):
+        """separator only between components (never at the start of the string)"""
+        if self.pieces:
+            self.sep()
 
     def add(self, text: str, field: str | None = None):
         if text:
@@ -265,6 +271,8 @@ def gen_house(p: Pools, rnd: random.Random) -> str:
         return f"{n}/{rnd.randint(1, 12)}"
     if y < 0.24:
         return n + rnd.choice("абвгдАБВГ")
+    if y < 0.255:
+        return n + " " + rnd.choice("АБВБ")          # «10 Б» — canon and gold drop the space
     if y < 0.26:
         return f"{n}/{rnd.randint(1, 9)}{rnd.choice('аб')}"
     return n
@@ -283,7 +291,22 @@ def typo(word: str, rnd: random.Random) -> str:
 
 
 JUNK = ["самовывоз", "до востребования", "адрес уточнить", "нет", "-", "???", "...", "позвонить", "тест",
-        "оставить на почте", "Казахстан", "РК", "доставка курьером", "N/A", "0"]
+        "оставить на почте", "Казахстан", "РК", "доставка курьером", "N/A", "0", "уточнить у получателя",
+        "87011234567", "адрес не указан", "по звонку", "см. комментарий", "позже скину адрес", "Иванов Иван Иванович",
+        "получатель уточнит", "+7 707 123 45 67", "забрать в отделении", "пвз", "курьер позвонит"]
+FIRST = ["Айгерим", "Асель", "Данияр", "Ерлан", "Нурлан", "Алия", "Мадина", "Иван", "Ольга", "Сергей", "Дмитрий", "Анна",
+         "Бекзат", "Арман", "Жанна", "Гульнара", "Самат", "Айдар", "Динара", "Руслан", "Азамат", "Камила", "Елена", "Тимур"]
+LAST = ["Сериков", "Иванов", "Ахметова", "Нурланов", "Садыкова", "Петров", "Касымов", "Бекова", "Смагулов", "Оспанова",
+        "Ким", "Ли", "Жумабаев", "Токтарова", "Абдуллаев", "Сидорова", "Кузнецов", "Ермекова", "Алиев", "Исаева"]
+COMPANY = ["ТОО Ромашка", "ТОО Строй Сервис", "АО Казпочта", "ТОО Alem Trade", "ТОО Kaspi Logistics", "ИП Ахметова А.",
+           "ТОО Нур Строй", "ИП Нурланов Е.К.", "ТОО Дәм", "ОФ Жас Қанат", "ТОО Technodom", "ИП Ким В.С."]
+
+
+def recipient(rnd: random.Random) -> str:
+    """Recipient / company noise as couriers see it; never a value."""
+    f, l = rnd.choice(FIRST), rnd.choice(LAST)
+    return rnd.choice([f"получатель {f} {l}", f"{l} {f}", f"{f} {l}", f"{l} {f[0]}.{rnd.choice('АБЕНС')}.", f"ИП {l}",
+                       rnd.choice(COMPANY), f"для {f}", f"{f}", f"получатель: {f}", f"{l} {f} {l}а", f"ФИО {l} {f}"])
 
 
 def build_record(p: Pools, rnd: random.Random) -> Rec:
@@ -484,6 +507,17 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         if latin:
             name = translit(name)
         x = rnd.random()
+        if use_num and lemma == "микрорайон" and not kk and x < 0.05 and city["place"] == "city":
+            # «Актау, 12-5-7»: микрорайон-дом-квартира, the courier shorthand of planned cities
+            h, apt = str(rnd.randint(1, 60)), str(rnd.randint(1, 200))
+            r.add(name, "street_name"); r.add("-"); r.add(h, "house"); r.add("-"); r.add(apt, "apartment")
+            g["street_type"], g["street_name"], g["house"], g["apartment"] = None, name, h, apt
+            r.triple = True
+            return True
+        if not use_num and not kk and x < 0.12 and re.search(r"\d", name):
+            r.add(name, "street_name")                 # «Самал 3, 15»: a numbered микрорайон with no type word at all
+            g["street_type"], g["street_name"] = None, name
+            return True
         if kk and lemma == "микрорайон" and x < 0.7:
             if use_num and rnd.random() < 0.5:
                 r.add(name, "street_name"); r.add(rnd.choice(["-ші", "-шы", ""])); r.sp()
@@ -541,9 +575,12 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         details.remove("apartment"); details.append("apartment")
 
     num_first_style = rnd.random() < (0.55 if kk else 0.25)       # «5 подъезд 239 кв» strings
-    dash_apartment = (not micro_mode) and "apartment" in details and rnd.random() < 0.05
+    dash_apartment = (not micro_mode) and "apartment" in details and rnd.random() < 0.08
+    details_first = bool(details) and not dash_apartment and rnd.random() < 0.05       # «подъезд 3, этаж 5, Абая 10, кв 25»
+    reverse = (not micro_mode) and bool(details) and not dash_apartment and rnd.random() < 0.02   # «кв 5, дом 10, ул. Абая, Алматы»
+    with_recipient = rnd.random() < 0.08
 
-    def details_block():
+    def details_block(kw_first: float | None = None):
         for f in details:
             if f == "apartment" and dash_apartment:
                 continue
@@ -555,13 +592,30 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             kw = wpick(rnd, kwset)
             if latin and f == "apartment":
                 kw = rnd.choice(["kv", "kv.", "flat", "apt"])
+            if latin and f == "floor":
+                kw = rnd.choice(["floor", "fl.", "этаж"])
             if rnd.random() < 0.03 and f == "entrance":
                 kw = rnd.choice(KW_TYPOS["подъезд"])
+            p_kw_first = kw_first if kw_first is not None else (0.25 if num_first_style else 0.8)
             if kk and rnd.random() < 0.3 and f in ("floor", "entrance"):
-                r.sep(); r.add(n, f); r.add(rnd.choice(["-ші ", "-шы ", "-інші "])); r.add(kw)
+                r.sepn(); r.add(n, f); r.add(rnd.choice(["-ші ", "-шы ", "-інші "])); r.add(kw)
+            elif not kk and f in ("floor", "entrance") and rnd.random() < 0.06:
+                # «2й подъезд», «4-й этаж»: the glued ordinal is one token with the number; gold strips it
+                r.sepn(); r.add(n + rnd.choice(["й", "й", "я"]) if rnd.random() < 0.5 else n, f)
+                if r.pieces[-1][0] == n:
+                    r.add(rnd.choice(["-й", "-ый", "-ой", "-я"]))
+                r.add(" " + kw)
+            elif f == "floor" and not kk and rnd.random() < 0.04:
+                r.sepn(); r.add(n, f); r.add(f"/{rnd.randint(int(n) + 1, int(n) + 16)}"); r.add(" " + kw)   # «3/9 этаж»
+            elif f == "apartment" and style["sep"] == ", " and len(details) == 1 and rnd.random() < 0.08 and g.get("house"):
+                r.add(rnd.choice([", ", ","])); r.add(n, f)                      # «Абая, 10, 5» — no keyword at all
             else:
-                r.sep(); kw_num(r, kw, n, f, 0.25 if num_first_style else 0.8, 0.22)
+                r.sepn(); kw_num(r, kw, n, f, p_kw_first, 0.22)
             g[f] = n
+        if rnd.random() < 0.04:                                                  # door codes are never values
+            code = rnd.randint(1, 9999)
+            r.sepn(); r.add(rnd.choice([f"код подъезда {code}", f"код {code}", f"домофон {code}", f"код двери {code}",
+                                        f"домофон: {code}", f"код {code}#", f"код от подъезда {code}"]))
 
     def landmark_block():
         x = rnd.random()
@@ -577,7 +631,7 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             text = f"{wpick(rnd, LANDMARK_KIND)} {name}"
         if rnd.random() < 0.3:
             text = text.lower()
-        r.sep()
+        r.sepn()
         if rnd.random() < 0.3:
             r.add(wpick(rnd, KW["landmark_marker"])); r.sp()
         r.add(text, "landmark")
@@ -588,8 +642,21 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         r.add(f"{rnd.randint(10, 19)}{rnd.randint(0, 9)}{rnd.randint(0, 9)}00"); r.sep()
     if rnd.random() < 0.06:
         r.add(wpick(rnd, PREFIX)); r.sep()
+    recipient_at_end = with_recipient and rnd.random() < 0.5
+    if with_recipient and not recipient_at_end:
+        r.add(recipient(rnd)); r.sep()
 
     want_city = rnd.random() < 0.85
+    if reverse:
+        # fully reversed courier style: details → house → street → city
+        details_block(kw_first=1.0)
+        h = gen_house(p, rnd)
+        r.sepn(); kw_num(r, wpick(rnd, KW["house"]), h, "house", 1.0, 0.1); g["house"] = h
+        r.sep(); street_block()
+        if want_city:
+            r.sep(); city_block()
+        g["living_area"] = None
+        return r
     district_only = (not want_city) and dists and rnd.random() < 0.35
     want_prov = (not is_rep) and rnd.random() < (0.28 if want_city else 0.1)
     want_dist = (rnd.random() < (0.22 if not is_village else 0.35)) or district_only
@@ -624,22 +691,29 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             wrote_any = True
     if want_landmark and rnd.random() < 0.25:
         landmark_block(); want_landmark = False; wrote_any = True
+    if details_first:
+        details_block()
+        wrote_any = True
     if wrote_any:
         r.sep()
     street_block()
-    house_block(after_street=True)
+    if not r.triple:
+        house_block(after_street=True)
     if want_living and living_after:
         r.sep()
         if not living_block() and r.pieces and r.pieces[-1][1] is None:
             r.pieces.pop()
-    if dash_apartment:
+    if dash_apartment and not r.triple:
         n = str(rnd.randint(1, 300))
         r.add(rnd.choice(["-", "-", " - "])); r.add(n, "apartment"); g["apartment"] = n
-    details_block()
+    if not details_first and not r.triple:
+        details_block()
     if want_landmark:
         landmark_block()
     if city_at_end:
         r.sep(); city_block()
+    if recipient_at_end:
+        r.sep(); r.add(recipient(rnd))
     if rnd.random() < 0.015 and r.pieces:            # phone between two components («…, тел 8701…, …»)
         cuts = [i + 1 for i, (t, f) in enumerate(r.pieces[:-1]) if f is None and t.strip() in (",", ";")]
         if cuts:
@@ -712,6 +786,10 @@ def finalize_gold(r: Rec, raw: str, spans: dict) -> dict:
             if f == "city" and r.city_mapped:
                 continue
             g[f] = raw[spans[f][0]:spans[f][1]]
+            if f in ("apartment", "entrance", "floor"):
+                g[f] = re.sub(r"(?<=\d)[йя]$", "", g[f])        # «2й» → 2, same as canon
+            if f == "house":
+                g[f] = g[f].replace(" ", "")                      # «10 Б» → 10Б, same as canon
     if g.get("house") and r.house_join:
         g["house"] += r.house_join
     return g

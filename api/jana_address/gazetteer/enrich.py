@@ -47,7 +47,8 @@ def enrich(fields: dict, prov: dict, rp: RuleParse, gz: Gazetteer | None = None)
 
     # 2. province from city (unambiguous only); a typo'd republican city («Алмты») still names its province
     if fields["province"] is None and fields["city"]:
-        p, src = gz.province_of_city(fields["city"], kind=rp.meta.get("city_kind"), district_hint=fields["district"])
+        p, src = gz.province_of_city(rp.meta.get("city_known") or fields["city"], kind=rp.meta.get("city_kind"),
+                                     district_hint=fields["district"])
         if p is None and not gz.settlement(fields["city"]):
             fz = gz.fuzzy_city(fields["city"])
             if fz and fz["province"]:

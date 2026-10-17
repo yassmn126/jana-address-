@@ -61,6 +61,26 @@ so it flatters the model; read it as a sanity check, not as an estimate.
 **Caveat:** both handmade sets come from the same team that wrote the generator and the rules. The first real
 number will come from the 700-record dev split of `train.json` (`make finetune-real` prints it).
 
+## 2a. Stress test — how the model was improved after it hit 99.6
+
+A model that scores 99.6 on its own test sets is only as good as those sets. `data/stress_handmade.json` (106 rows) was
+written in styles the generator never produced: recipient names and companies («ИП Сериков, Астана, …»), house‑apartment
+dashes («52а‑18», «12‑5‑7»), details before the street («3 подъезд 5 этаж 25 кв Абая 10 Алматы»), door codes («код подъезда 1234»),
+glued ordinals («2й подъезд»), floors as «3/9 этаж», «10 Б», «блок А», numbered streets («ул. 8 Марта», «ул. 187»), microdistricts
+with no type word («Орбита 3, 27а»), typo'd cities («Алмты»), junk strings.
+
+| | rules | hybrid v3 |
+|---|---|---|
+| stress set, before | 89.69 | 92.65 |
+
+Every failure class became (a) a generator feature, so the tagger sees it, and (b) where the pattern is unambiguous, a grammar
+rule (`api/tests/test_stress_rules.py` pins them). Tokenizer: «52а‑18» no longer glues into one word. Grammar: building parts are
+joined after the fallback house; one‑letter type/settlement abbreviations need a dot or a Capitalized name («у получателя»,
+«с мечетью»); «код/домофон N» is never a value; «3/9 этаж» → 3; «Жандосова58кв12» binds the house to the street; a microdistrict
+name keeps its number when a second number or «дом N» follows; a typo'd first token one edit from a city is the city, as written.
+
+STRESS_RESULTS
+
 ## 3. Commands
 
 ```bash

@@ -82,8 +82,8 @@ offline-test: ## start the stack with NO network and run the sample through it
 
 # ------------------------------------------------------------------ ML track without train.json (cold start)
 OSM_URL ?= https://download.geofabrik.de/asia/kazakhstan-latest.osm.pbf
-SYNTH_N ?= 150000
-GOLD_SETS ?= --gold data/dev_handmade.json --gold data/conventions_examples.json
+SYNTH_N ?= 220000
+GOLD_SETS ?= --gold data/dev_handmade.json --gold data/conventions_examples.json --gold data/stress_handmade.json
 
 osm: ## download the OSM Kazakhstan extract (225 MB, resumable) → data/osm/
 	mkdir -p data/osm && curl -L -C - --retry 10 -o data/osm/kazakhstan-latest.osm.pbf $(OSM_URL)
@@ -95,18 +95,18 @@ synth-grammar: ## OSM-backed synthetic addresses: train (seed 1) + held-out dev 
 	$(PY) -m training.synth_grammar --n $(SYNTH_N) --seed 1 --out data/dataset/synth_grammar.jsonl --id-prefix sg
 	$(PY) -m training.synth_grammar --n 5000 --seed 2 --out data/dataset/synth_dev.jsonl --gold-out data/dataset/synth_dev_gold.json --id-prefix sd
 
-train-charcrf: ## char-CNN+BiLSTM+CRF on synthetic data (CPU, ~1 h) → api/artifacts/model.onnx + model_meta.json
+train-charcrf: ## char-CNN+BiLSTM+CRF on synthetic data (CPU, ~35 min) → api/artifacts/model.onnx + model_meta.json
 	$(PY) -m training.train_charcrf --train data/dataset/synth_grammar.jsonl --dev data/dataset/synth_dev.jsonl \
-	  --test data/dev_handmade.json --test data/conventions_examples.json --out runs/charcrf --export api/artifacts --epochs 8
+	  --test data/dev_handmade.json --test data/stress_handmade.json --out runs/charcrf --export api/artifacts --epochs 6 --word-drop 0.2
 
 tune: ## grid-search the arbiter thresholds → api/artifacts/arbiter_policy.json
 	$(PY) -m training.tune_arbiter $(GOLD_SETS) --gold data/dataset/synth_dev_gold.json:0.3
 
-ab: ## rules vs model vs hybrid, jury metric per gold file
-	$(PY) -m eval.ab $(GOLD_SETS) --gold data/dataset/synth_dev_gold.json --errors-dir runs/ab --json runs/ab/ab.json
+ab: ## rules vs model vs hybrid, jury metric per gold file (test_handmade is the held-out set: never tune on it)
+	$(PY) -m eval.ab --gold data/test_handmade.json $(GOLD_SETS) --gold data/dataset/synth_dev_gold.json --errors-dir runs/ab --json runs/ab/ab.json
 
 ml-cold-start: gazetteer synth-grammar train-charcrf tune ## everything above + calibration + A/B, no train.json needed
-	$(PY) -m training.calibrate --gold data/dataset/synth_dev_gold.json --gold data/dev_handmade.json:10 --plot
+	$(PY) -m training.calibrate --gold data/dataset/synth_dev_gold.json --gold data/dev_handmade.json:10 --gold data/stress_handmade.json:10 --eval-gold data/test_handmade.json --plot
 	$(MAKE) ab test
 
 # ------------------------------------------------------------------ when train.json arrives
