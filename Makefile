@@ -4,7 +4,8 @@ PY ?= python3
 SAMPLE ?= data/sample_input.json
 GOLD ?= data/sample_output.json
 
-.PHONY: help up down logs test eval parse label-dry label dataset synth train export calibrate eval-dev images save-images offline-test speed web-dev api-dev
+.PHONY: help up down logs test eval parse label-dry label dataset synth train export calibrate eval-dev images save-images offline-test speed web-dev api-dev \
+        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -51,7 +52,7 @@ train: ## fine-tune xlm-roberta-base (GPU); see training/README.md for options
 export: ## checkpoint → api/artifacts/{model.onnx,tokenizer.json,labels.json} (+ ONNX≡PyTorch check)
 	$(PY) -m training.export_onnx --checkpoint runs/xlmr --labels data/dataset/labels.json --check data/dataset/dev.jsonl
 
-calibrate: ## confidence model on the dev gold → api/artifacts/calibrator.pkl (+ reliability plot)
+calibrate: ## confidence model on the dev gold → api/artifacts/calibrator.json (+ reliability plot)
 	$(PY) -m training.calibrate --gold data/dataset/dev_gold.json --plot
 
 eval-dev: ## jury metric on our dev gold (after `make dataset`)
@@ -75,3 +76,44 @@ offline-test: ## start the stack with NO network and run the sample through it
 	docker run --rm --network jana-nonet -v $$PWD/$(SAMPLE):/in.json:ro python:3.11-slim \
 	  python -c "import json,urllib.request;d=open('/in.json','rb').read();r=urllib.request.Request('http://jana-api-offline:8000/api/v1/parse/batch',data=d,headers={'Content-Type':'application/json'});print(urllib.request.urlopen(r).read().decode()[:400])"
 	docker stop jana-api-offline
+
+# ------------------------------------------------------------------ ML track without train.json (cold start)
+OSM_URL ?= https://download.geofabrik.de/asia/kazakhstan-latest.osm.pbf
+SYNTH_N ?= 150000
+GOLD_SETS ?= --gold data/dev_handmade.json --gold data/conventions_examples.json
+
+osm: ## download the OSM Kazakhstan extract (225 MB, resumable) → data/osm/
+	mkdir -p data/osm && curl -L -C - --retry 10 -o data/osm/kazakhstan-latest.osm.pbf $(OSM_URL)
+
+gazetteer: ## OSM → api/artifacts/gazetteer.sqlite (~90 s): settlements, districts, микрорайоны/ЖК, streets, houses
+	$(PY) -m data_pipeline.build_gazetteer --pbf data/osm/kazakhstan-latest.osm.pbf --out api/artifacts/gazetteer.sqlite
+
+synth-grammar: ## OSM-backed synthetic addresses: train (seed 1) + held-out dev (seed 2)
+	$(PY) -m training.synth_grammar --n $(SYNTH_N) --seed 1 --out data/dataset/synth_grammar.jsonl --id-prefix sg
+	$(PY) -m training.synth_grammar --n 5000 --seed 2 --out data/dataset/synth_dev.jsonl --gold-out data/dataset/synth_dev_gold.json --id-prefix sd
+
+train-charcrf: ## char-CNN+BiLSTM+CRF on synthetic data (CPU, ~1 h) → api/artifacts/model.onnx + model_meta.json
+	$(PY) -m training.train_charcrf --train data/dataset/synth_grammar.jsonl --dev data/dataset/synth_dev.jsonl \
+	  --test data/dev_handmade.json --test data/conventions_examples.json --out runs/charcrf --export api/artifacts --epochs 8
+
+tune: ## grid-search the arbiter thresholds → api/artifacts/arbiter_policy.json
+	$(PY) -m training.tune_arbiter $(GOLD_SETS) --gold data/dataset/synth_dev_gold.json:0.3
+
+ab: ## rules vs model vs hybrid, jury metric per gold file
+	$(PY) -m eval.ab $(GOLD_SETS) --gold data/dataset/synth_dev_gold.json --errors-dir runs/ab --json runs/ab/ab.json
+
+ml-cold-start: gazetteer synth-grammar train-charcrf tune ## everything above + calibration + A/B, no train.json needed
+	$(PY) -m training.calibrate --gold data/dataset/synth_dev_gold.json --gold data/dev_handmade.json:10 --plot
+	$(MAKE) ab test
+
+# ------------------------------------------------------------------ when train.json arrives
+pseudo-label: ## offline silver labels (rules ⊕ model agree) + review queue for the UI → data/labels_pseudo.jsonl
+	$(PY) -m training.pseudo_label --input data/train.json --output data/labels_pseudo.jsonl
+
+finetune-real: ## real labels → dataset → fine-tune the synthetic-pretrained tagger (warm start) → export
+	$(PY) -m training.build_dataset --labels data/labels_pseudo.jsonl --corrections data/corrections.jsonl --only-verified --out data/dataset
+	$(PY) -m training.train_charcrf --init runs/charcrf/model.pt --train data/dataset/train.jsonl \
+	  --train data/dataset/synth_grammar.jsonl --max-train 60000 --real-weight 5 --dev data/dataset/dev.jsonl \
+	  --test data/dev_handmade.json --test data/conventions_examples.json --out runs/charcrf_real --export api/artifacts --epochs 6 --lr 1e-3
+	$(PY) -m training.calibrate --gold data/dataset/dev_gold.json --plot
+	$(PY) -m eval.ab --gold data/dataset/dev_gold.json $(GOLD_SETS) --errors-dir runs/ab

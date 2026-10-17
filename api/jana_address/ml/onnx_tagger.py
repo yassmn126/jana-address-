@@ -1,6 +1,12 @@
 """ONNX token tagger — the learned half of the parser.
 
-Contract (training/export_onnx.py writes these into api/artifacts/):
+Two artifact kinds, detected from the files in api/artifacts/:
+
+  charcrf (training/train_charcrf.py — default, CPU-trainable, ~4 MB):
+    model.onnx       inputs  chars[1×T×C], words[1×T], shapes[1×T], feats[1×T×F]  → emissions[1×T×L]
+    model_meta.json  kind=charcrf, labels, vocabularies, gazetteer sets, CRF transitions (Viterbi in numpy)
+
+  hf (training/train.py + export_onnx.py — XLM-R fine-tuned on a GPU):
     model.onnx       inputs  input_ids[int64, B×L], attention_mask[int64, B×L]
                      output  logits[float32, B×L×C]
     tokenizer.json   HuggingFace fast tokenizer (xlm-roberta-base or whatever was fine-tuned)
@@ -69,10 +75,24 @@ class OnnxTagger:
         self.labels: list[str] = []
         self._load()
 
+    kind: str = "none"
+    charcrf = None
+
     def _load(self) -> None:
         model, tok, labels = self.dir / "model.onnx", self.dir / "tokenizer.json", self.dir / "labels.json"
-        if os.environ.get("JANA_MODEL", "auto").lower() == "off" or not (model.exists() and tok.exists() and labels.exists()):
+        meta = self.dir / "model_meta.json"
+        if os.environ.get("JANA_MODEL", "auto").lower() == "off" or not model.exists():
             return
+        if meta.exists() and json.loads(meta.read_text(encoding="utf-8")).get("kind") == "charcrf":
+            from .charcrf import CharCrfRuntime
+            self.charcrf = CharCrfRuntime(model, meta, threads=int(os.environ.get("JANA_ORT_THREADS", "2")))
+            self.labels = self.charcrf.labels
+            self.session = self.charcrf.session
+            self.kind = "charcrf"
+            return
+        if not (tok.exists() and labels.exists()):
+            return
+        self.kind = "hf"
         import onnxruntime as ort                    # heavy imports only when the artifacts exist
         from tokenizers import Tokenizer
 
@@ -92,6 +112,9 @@ class OnnxTagger:
         """Return (spans, per-token labels, per-token probabilities) for one address."""
         if not tokens or not self.available():
             return [], [], []
+        if self.charcrf is not None:
+            tok_label, tok_prob = self.charcrf.tag(tokens)
+            return spans_from_token_labels(tokens, tok_label, tok_prob), tok_label, tok_prob
         enc = self.tokenizer.encode([t.text for t in tokens], is_pretokenized=True)
         ids = np.array([enc.ids], dtype=np.int64)
         mask = np.array([enc.attention_mask], dtype=np.int64)
@@ -119,6 +142,8 @@ class OnnxTagger:
         """Batched variant (padding) — use for throughput; semantics identical to tag()."""
         if not batch or not self.available():
             return [([], [], []) for _ in batch]
+        if self.charcrf is not None:
+            return [self.tag(toks) for toks in batch]
         encs = self.tokenizer.encode_batch([[t.text for t in toks] for toks in batch], is_pretokenized=True)
         L = max(len(e.ids) for e in encs)
         pad_id = self.tokenizer.token_to_id("<pad>") or 0

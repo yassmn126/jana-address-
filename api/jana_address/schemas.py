@@ -50,6 +50,8 @@ class TokenOut(BaseModel):
     kind: str
     label: Optional[str] = None
     role: Optional[str] = None
+    model_label: Optional[str] = None      # BIO label from the ML tagger (explain mode, when a model is loaded)
+    model_prob: Optional[float] = None
 
 
 class ExplainOut(RecordOut):

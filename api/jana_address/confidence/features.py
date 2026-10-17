@@ -8,6 +8,8 @@ FLAG_FEATURES = [
     "leftover_number", "multiple_street_types", "microdistrict_as_living_area", "city_kk_only",
     "keyword_without_number", "duplicate_house", "duplicate_apartment", "house_has_building_part",
     "district_kw_without_name", "city_duplicate", "postcode", "living_area_from_gazetteer",
+    # v2 (OSM gazetteer + tagger)
+    "street_in_gazetteer", "street_not_in_gazetteer", "district_from_osm", "arb_province_not_canonical",
 ]
 ARB_FIELDS = ["province", "city", "street_name", "house", "apartment", "entrance", "floor", "district", "living_area"]
 ARB_OUTCOMES = ["agree", "rule_only", "model_only", "model_wins", "rule_wins", "model_rejected", "overlap_dropped"]
@@ -16,8 +18,9 @@ FEATURE_NAMES = (
     + [f"arb:{f}:{o}" for f in ARB_FIELDS for o in ARB_OUTCOMES]
     + [f"prob:{f}" for f in ARB_FIELDS]
     + ["has:province", "has:city", "has:street_name", "has:house", "has:apartment", "n_tokens", "has_latin", "has_slash"]
+    + ["model:min_prob_address", "model:mean_prob_address", "model:n_disagree", "model:used"]
 )
-VERSION = 1
+VERSION = 2
 
 
 def featurize(flags: list[str], fields: dict, model_probs: dict | None, n_tokens: int, raw: str) -> list[float]:
@@ -37,5 +40,10 @@ def featurize(flags: list[str], fields: dict, model_probs: dict | None, n_tokens
     x.append(float(n_tokens))
     x.append(1.0 if any("a" <= ch.lower() <= "z" for ch in raw) else 0.0)
     x.append(1.0 if "/" in raw else 0.0)
+    addr = [float(mp[k]) for k in ("PROVINCE", "CITY", "STREET_NAME", "HOUSE") if k in mp]
+    x.append(min(addr) if addr else 0.0)
+    x.append(sum(addr) / len(addr) if addr else 0.0)
+    x.append(float(sum(1 for f in flags if f.endswith(("_model_wins", "_rule_wins", "_model_rejected")))))
+    x.append(1.0 if mp else 0.0)
     assert len(x) == len(FEATURE_NAMES)
     return x

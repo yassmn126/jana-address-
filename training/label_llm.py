@@ -111,13 +111,15 @@ def label_with_openai_compatible(batch: list[dict], system: str, model: str, usa
     return json.loads(resp.choices[0].message.content)["records"]
 
 
-STRING_PROVENANCE = {"string", "string+table", "string+gazetteer"}
+def from_string(provenance: str | None) -> bool:
+    """'string', 'string+table', 'string+gazetteer[:osm|:seed]' are labels; pure 'gazetteer:*' fills are not."""
+    return bool(provenance) and provenance.startswith("string")
 
 
-def rules_string_fields(id_: str, raw: str) -> dict:
-    """Rule-parser fields that come from the STRING (gazetteer-filled fields are not labels)."""
-    p = parse_one(id_, raw, explain=True)
-    return {f: (p[f] if (p["provenance"].get(f) in STRING_PROVENANCE) else None) for f in FIELDS}
+def rules_string_fields(id_: str, raw: str, mode: str = "rules") -> dict:
+    """Parser fields that come from the STRING (gazetteer-filled fields are not labels)."""
+    p = parse_one(id_, raw, explain=True, mode=mode)
+    return {f: (p[f] if from_string(p["provenance"].get(f)) else None) for f in FIELDS}
 
 
 def label_with_rules(batch: list[dict], system: str, model: str, usage: dict) -> list[dict]:

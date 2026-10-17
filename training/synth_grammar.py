@@ -222,6 +222,8 @@ class Rec:
         self.rnd, self.style = rnd, style
         self.pieces: list[list] = []          # [text, field]
         self.gold = {f: None for f in FIELDS}
+        self.city_mapped = False              # Kazakh spelling written, Russian name in gold (Q2)
+        self.house_join = ""                  # «12 корпус 2» → gold «12/2» (Q7)
 
     def add(self, text: str, field: str | None = None):
         if text:
@@ -279,8 +281,8 @@ def typo(word: str, rnd: random.Random) -> str:
 
 
 def build_record(p: Pools, rnd: random.Random) -> Rec:
-    kk = rnd.random() < 0.12                     # Kazakh keywords and word order
-    latin = (not kk) and rnd.random() < 0.035
+    kk = rnd.random() < 0.15                     # Kazakh keywords and word order
+    latin = (not kk) and rnd.random() < 0.05
     style = {"sep": wpick(rnd, [(", ", 70), (" ", 18), (",", 10), (". ", 2)])}
     r = Rec(rnd, style)
     g = r.gold
@@ -354,6 +356,7 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         # gold: Kazakh spelling → Russian name (Q2); Latin / Russian as written
         if written == city.get("kk") and city.get("kk") != city["name"]:
             g["city"] = city["name"]
+            r.city_mapped = True
         else:
             g["city"] = written
         if is_rep:
@@ -437,7 +440,7 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         elif lemma and x < 0.92 and lemma in STREET_KW_BEFORE and rnd.random() < 0.88:
             kw = wpick(rnd, STREET_KW_BEFORE[lemma])
             if latin:
-                kw = {"улица": rnd.choice(["ul.", "ul", "str."]), "проспект": rnd.choice(["pr.", "prospekt", "ave"]),
+                kw = {"улица": rnd.choice(["ul.", "ul", "str.", "street"]), "проспект": rnd.choice(["pr.", "prospekt", "ave", "avenue"]),
                       "микрорайон": "mkr"}.get(lemma, kw)
             if rnd.random() < 0.04 and lemma in KW_TYPOS:
                 kw = rnd.choice(KW_TYPOS[lemma])
@@ -514,8 +517,8 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         g["house"] = h
         if rnd.random() < 0.025:
             k = str(rnd.randint(1, 5)) if rnd.random() < 0.7 else rnd.choice("АБВ")
-            r.add(rnd.choice([" корпус ", " корп. ", " к. ", ", блок ", " блок "])); r.add(k)
-            g["house"] = f"{h}/{k}"
+            r.add(rnd.choice([" корпус ", " корп. ", ", блок ", " блок "]) + k)
+            r.house_join = f"/{k}"
         return True
 
     details = []
@@ -584,7 +587,8 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
     want_dist = (rnd.random() < (0.22 if not is_village else 0.35)) or district_only
     want_living = (not micro_mode) and rnd.random() < 0.12
     want_landmark = rnd.random() < 0.07
-    city_at_end = want_city and rnd.random() < 0.05
+    city_at_end = want_city and rnd.random() < 0.08
+    living_after = rnd.random() < 0.3                # «пр. Аль-Фараби 77/8, ЖК Esentai City, кв 45»
 
     head = []
     if want_prov:
@@ -605,7 +609,7 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             wrote_any = True
         elif r.pieces and r.pieces[-1][1] is None:
             r.pieces.pop()
-    if want_living:
+    if want_living and not living_after:
         if wrote_any:
             r.sep()
         if living_block():
@@ -616,6 +620,10 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         r.sep()
     street_block()
     house_block(after_street=True)
+    if want_living and living_after:
+        r.sep()
+        if not living_block() and r.pieces and r.pieces[-1][1] is None:
+            r.pieces.pop()
     if dash_apartment:
         n = str(rnd.randint(1, 300))
         r.add(rnd.choice(["-", "-", " - "])); r.add(n, "apartment"); g["apartment"] = n
@@ -670,7 +678,9 @@ def render(r: Rec) -> tuple[str, dict[str, tuple[int, int]]]:
     raw, spans, pos = "", {}, 0
     for text, f in r.pieces:
         if f:
-            if f in spans and spans[f][1] == pos:            # contiguous pieces of one field (province name + «обл»)
+            # pieces of one field separated only by whitespace form ONE span (province name + «облысы»),
+            # matching the rule grammar's spans
+            if f in spans and raw[spans[f][1]:pos].strip() == "":
                 spans[f] = (spans[f][0], pos + len(text))
             elif f not in spans:
                 spans[f] = (pos, pos + len(text))
@@ -684,13 +694,11 @@ def finalize_gold(r: Rec, raw: str, spans: dict) -> dict:
     g = dict(r.gold)
     for f in ("city", "district", "living_area", "street_name", "house", "apartment", "entrance", "floor", "landmark"):
         if f in spans and g.get(f) is not None:
-            written = raw[spans[f][0]:spans[f][1]]
-            if f == "city" and g["city"] and g["city"].lower() != written.lower() and norm(g["city"]) != norm(written):
-                continue                                     # Kazakh spelling mapped to Russian
-            if f == "house" and "/" in (g["house"] or "") and written != g["house"]:
-                g[f] = written + g["house"][len(r.gold["house"].split("/")[0]):] if "корп" in raw or "блок" in raw or " к. " in raw else written
+            if f == "city" and r.city_mapped:
                 continue
-            g[f] = written
+            g[f] = raw[spans[f][0]:spans[f][1]]
+    if g.get("house") and r.house_join:
+        g["house"] += r.house_join
     return g
 
 

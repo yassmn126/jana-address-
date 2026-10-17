@@ -45,9 +45,15 @@ def enrich(fields: dict, prov: dict, rp: RuleParse, gz: Gazetteer | None = None)
         if c:
             fields["city"], prov["city"] = c, src
 
-    # 2. province from city
+    # 2. province from city (unambiguous only); a typo'd republican city («Алмты») still names its province
     if fields["province"] is None and fields["city"]:
-        p, src = gz.province_of_city(fields["city"])
+        p, src = gz.province_of_city(fields["city"], kind=rp.meta.get("city_kind"), district_hint=fields["district"])
+        if p is None and not gz.settlement(fields["city"]):
+            fz = gz.fuzzy_city(fields["city"])
+            if fz and fz["province"]:
+                p = fz["province"]
+                src = "string+fuzzy" if fz["province"] == fz["name"] else "gazetteer:fuzzy"
+                rp.flags.append("city_fuzzy_match")
         if p:
             fields["province"], prov["province"] = p, src
 
@@ -74,7 +80,7 @@ def enrich(fields: dict, prov: dict, rp: RuleParse, gz: Gazetteer | None = None)
             d, src = gz.district_of_microdistrict(fields["city"], fields["living_area"])
         if d is None and fields["street_name"]:
             d, src = gz.district_of_street(fields["city"], fields["street_name"], fields["house"], fields["street_type"])
-        if d is None:
+        if d is None and rp.meta.get("city_kind") != "city":
             d, src = gz.rural_district_of(fields["city"], fields["province"])
         if d is None and rp.meta.get("district_from_city"):
             d, src = rp.meta["district_from_city"], "gazetteer:seed"

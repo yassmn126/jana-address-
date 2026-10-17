@@ -37,6 +37,7 @@ HERE = Path(__file__).parent
 DETAIL_FIELDS = ("APARTMENT", "ENTRANCE", "FLOOR")
 NUMBER_FIELDS = ("HOUSE",) + DETAIL_FIELDS
 ADJ_SUFFIXES = ("ский", "ская", "ской", "ское", "кий", "кая", "ной", "ный", "ная", "ий", "ый", "ая")
+CITY_WORDS_URBAN = {"город", "г", "гор", "қаласы", "каласы", "қ", "қала", "кала"}
 _HOUSE_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?$")
 
 
@@ -595,6 +596,7 @@ class RuleParser:
                 continue
             self._set(rp, "CITY", toks, idxs, "city_kw", 0.9)
             self._note_city(rp, " ".join(toks[k].text for k in idxs))
+            rp.meta["city_kind"] = "city" if norm_token(t.text) in CITY_WORDS_URBAN else "village"
         # 5b Kazakh suffix: «Ақтөбе қаласы», «Боралдай ауылы»
         for i, t in enumerate(toks):
             if t.role != "city_suffix_kk" or not self._free(t):
@@ -619,6 +621,7 @@ class RuleParser:
                 continue
             self._set(rp, "CITY", toks, idxs, "city_kk_suffix", 0.8)
             rp.flags.append("city_kk_only")
+            rp.meta["city_kind"] = "city" if norm_token(t.text) in CITY_WORDS_URBAN else "village"
             self._note_city(rp, " ".join(toks[k].text for k in idxs), kk=True)
         # 5c bare seed match (prefer the first free WORD chunk that is a known city)
         if "CITY" not in rp.spans:

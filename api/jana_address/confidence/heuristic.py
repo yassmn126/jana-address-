@@ -38,19 +38,19 @@ _CAL_TRIED = False
 
 
 def _calibrator():
-    """Load api/artifacts/calibrator.pkl once (training/calibrate.py). None → heuristic."""
+    """api/artifacts/calibrator.json (training/calibrate.py): logistic regression + isotonic table.
+    Pure numpy at runtime — no sklearn/LightGBM in the Docker image. None → heuristic below."""
     global _CAL, _CAL_TRIED
     if not _CAL_TRIED:
         _CAL_TRIED = True
+        import json
         import os
-        import pickle
         from pathlib import Path
-        path = Path(os.environ.get("JANA_ARTIFACTS_DIR", Path(__file__).resolve().parents[2] / "artifacts")) / "calibrator.pkl"
+        path = Path(os.environ.get("JANA_ARTIFACTS_DIR", Path(__file__).resolve().parents[2] / "artifacts")) / "calibrator.json"
         if path.exists() and os.environ.get("JANA_CALIBRATOR", "auto") != "off":
             try:
-                with path.open("rb") as f:
-                    _CAL = pickle.load(f)
-            except Exception:  # noqa: BLE001 — a broken pickle must not take the service down
+                _CAL = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001 — a broken file must not take the service down
                 _CAL = None
     return _CAL
 
@@ -59,12 +59,17 @@ def calibrated_confidence(flags: list[str], fields: dict, model_probs: dict | No
     cal = _calibrator()
     if cal is None:
         return None
-    from .features import VERSION, featurize
-    if cal.get("version") != VERSION:
+    import math
+
+    import numpy as np
+
+    from .features import FEATURE_NAMES, VERSION, featurize
+    if cal.get("version") != VERSION or cal.get("features") != FEATURE_NAMES:
         return None
-    x = [featurize(flags, fields, model_probs, n_tokens, raw)]
-    p = float(cal["clf"].predict_proba(x)[0][1])
-    p = float(cal["iso"].predict([p])[0])
+    x = (np.array(featurize(flags, fields, model_probs, n_tokens, raw)) - np.array(cal["mean"])) / np.array(cal["scale"])
+    z = float(np.dot(x, cal["coef"]) + cal["intercept"])
+    p = 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, z))))
+    p = float(np.interp(p, cal["iso_x"], cal["iso_y"]))
     return round(max(0.01, min(0.99, p)), 2)
 
 

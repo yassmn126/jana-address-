@@ -52,10 +52,14 @@ def version() -> dict:
 def _to_records(payload: Any) -> list[dict]:
     if isinstance(payload, dict) and "records" in payload:
         payload = payload["records"]
+    elif isinstance(payload, dict) and "raw_address" in payload:
+        payload = [payload]                       # a single record is a batch of one
     if not isinstance(payload, list):
         raise HTTPException(400, "Body must be a JSON array of {id, raw_address} or {\"records\": [...]}")
     recs = []
     for i, r in enumerate(payload):
+        if isinstance(r, str):
+            r = {"id": str(i), "raw_address": r}  # a plain list of address strings
         if not isinstance(r, dict):
             raise HTTPException(400, f"record #{i} is not an object")
         recs.append({"id": str(r.get("id", i)), "raw_address": r.get("raw_address", "") or ""})

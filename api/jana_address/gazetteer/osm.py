@@ -72,18 +72,75 @@ class Gazetteer:
         r = max(cands, key=score)
         return {"id": r[0], "name": r[1], "kk": r[2], "place": r[3], "province": r[4], "district": r[5]}
 
-    def province_of_city(self, city: str | None, province_hint: str | None = None):
+    def _candidates(self, name: str) -> list[tuple]:
+        """(id, name, kk, place, province, district, n_streets, population) for every settlement with this name."""
+        rows = self._q(
+            "SELECT DISTINCT s.id, s.name, s.name_kk, s.place, s.province, s.district, s.n_streets, s.population "
+            "FROM settlement_names n JOIN settlements s ON s.id = n.settlement_id WHERE n.norm = ?", (norm(name),))
+        return rows
+
+    def province_of_city(self, city: str | None, province_hint: str | None = None, kind: str | None = None,
+                         district_hint: str | None = None):
+        """Province of a written settlement name, only when it is unambiguous.
+
+        «Абай» is a town in Karaganda region AND dozens of villages: with «ауылы / село» in the string
+        (kind='village') only villages count; a district written next to it («Сарыағаш ауданы») narrows it
+        down; if several provinces remain the answer is None — a wrong fill is worse than none."""
         if not city:
             return None, None
         seed = self._seed_cities.get(norm(city))
-        if seed:
+        cands = self._candidates(city)
+        if kind == "village":
+            cands = [r for r in cands if r[3] in ("village", "hamlet", "town")] or cands
+        elif kind == "city":
+            cands = [r for r in cands if r[3] in ("city", "town")] or cands
+        if district_hint:
+            dk = norm(district_hint)[:6]
+            narrowed = [r for r in cands if r[5] and norm(r[5]).startswith(dk)]
+            cands = narrowed or cands
+        if province_hint:
+            cands = [r for r in cands if r[4] == province_hint] or cands
+        if not cands:
+            if seed and kind != "village":
+                return seed["province"], SEED
+            return None, None
+        top = max(PLACE_RANK.get(r[3], 0) for r in cands)
+        provs = {r[4] for r in cands if PLACE_RANK.get(r[3], 0) == top and r[4]}
+        if top >= PLACE_RANK["town"] and seed and seed["province"] in provs:
             return seed["province"], SEED
-        s = self.settlement(city, province_hint)
-        if s and s["province"] and s["place"] in ("city", "town"):
-            return s["province"], OSM
-        if s and s["province"] and province_hint is None:
-            return s["province"], OSM
+        if len(provs) == 1:
+            return provs.pop(), OSM
         return None, None
+
+    @lru_cache(maxsize=1)
+    def _city_names(self) -> list[tuple[str, str, str]]:
+        """(norm, name, province) of cities and towns — the pool for typo-tolerant matching."""
+        out = {norm(r["name"]): (norm(r["name"]), r["name"], r["province"]) for r in self._seed_cities.values()}
+        for name, prov in self._q("SELECT name, province FROM settlements WHERE place IN ('city','town') AND province IS NOT NULL"):
+            if name and norm(name) not in out:
+                out[norm(name)] = (norm(name), name, prov)
+        return list(out.values())
+
+    def fuzzy_city(self, written: str | None) -> dict | None:
+        """«Алмты» → Алматы, «Павладар» → Павлодар: one edit (two for long names), unique best match only."""
+        if not written:
+            return None
+        key = norm(written)
+        if len(key) < 5:
+            return None
+        limit = 1 if len(key) < 9 else 2
+        best, best_d, ties = None, limit + 1, 0
+        for k, name, prov in self._city_names():
+            if abs(len(k) - len(key)) > limit:
+                continue
+            d = _osa(key, k, limit)
+            if d < best_d:
+                best, best_d, ties = (name, prov), d, 0
+            elif d == best_d:
+                ties += 1
+        if best is None or best_d == 0 or ties:
+            return None
+        return {"name": best[0], "province": best[1], "distance": best_d}
 
     def city_ru(self, written: str | None):
         """Kazakh spelling of a settlement → its Russian name («Қарағанды» → «Караганда», «Орал» → «Уральск»)."""
@@ -223,6 +280,24 @@ class Gazetteer:
 
     def street_exists(self, city: str | None, street: str | None) -> bool:
         return bool(self._streets(city, street))
+
+
+def _osa(a: str, b: str, limit: int) -> int:
+    """Optimal string alignment distance (Damerau–Levenshtein with adjacent transpositions), early exit > limit."""
+    if a == b:
+        return 0
+    prev2, prev = None, list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        cur = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                cur[j] = min(cur[j], prev2[j - 2] + 1)
+        if min(cur) > limit:
+            return limit + 1
+        prev2, prev = prev, cur
+    return prev[-1]
 
 
 _GZ: Gazetteer | None = None

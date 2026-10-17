@@ -45,6 +45,12 @@ Check: a new teammate can review 20 records in < 3 minutes without instructions.
 
 ## Track B — Kassymzhomart: data + ML (GPU)
 
+**Status (2026-10-18, branch `feat/ml-tagger`):** cold-start ML is done without `train.json`. That covers the OSM gazetteer
+(`make gazetteer`), the grammar synthetic generator, the char-CNN+BiLSTM+CRF tagger (ONNX in `api/artifacts/`), arbiter
+tuning, the JSON calibrator, the A/B evaluator and offline self-training (`make pseudo-label` → `make finetune-real`).
+Details and numbers: [ML.md](ML.md). B1–B4 below still apply once real data is in; the char-CRF path replaces the
+XLM-R steps unless the GPU run beats it on the real dev set.
+
 Code map: `training/` (all scripts), `api/jana_address/ml/onnx_tagger.py` (inference contract),
 `api/jana_address/assembly/arbiter.py` (rules ⊕ model policy), `api/jana_address/confidence/`.
 
