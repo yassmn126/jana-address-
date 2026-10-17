@@ -87,6 +87,7 @@ def _respond(rows: list[dict], explain: bool, download: bool) -> JSONResponse:
     return JSONResponse(_serialize(rows, explain), headers=headers)
 
 
+@app.post("/api/parse", response_model=None, include_in_schema=False)   # alias used by the static frontend (app.js)
 @app.post("/api/v1/parse/batch", response_model=None,
           responses={200: {"description": "Array of records in the jury schema (ExplainOut with ?explain=1)"}})
 async def parse_batch_endpoint(request: Request,

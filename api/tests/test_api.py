@@ -51,6 +51,14 @@ def test_batch_file_upload_on_both_routes():
         assert r.status_code == 200 and "attachment" in r.headers.get("content-disposition", "")
 
 
+def test_frontend_alias_route():
+    """app.js (static frontend) posts to /api/parse."""
+    with TestClient(app) as c:
+        r = c.post("/api/parse", json=[{"id": "a", "raw_address": "жуалы 19"}])
+        assert r.status_code == 200, r.text
+        assert r.json()[0]["street_name"] == "жуалы" and set(r.json()[0]) == JURY_KEYS
+
+
 def test_batch_json_lines_and_bom():
     with TestClient(app) as c:
         body = "﻿" + "\n".join(json.dumps({"id": f"l{i}", "raw_address": s}, ensure_ascii=False)
