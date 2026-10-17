@@ -36,6 +36,7 @@ def main(argv=None) -> int:
     ap.add_argument("--epochs", type=float, default=5)
     ap.add_argument("--lr", type=float, default=3e-5)
     ap.add_argument("--bs", type=int, default=32)
+    ap.add_argument("--grad-accum", type=int, default=1, help="gradient accumulation steps (use when VRAM is shared)")
     ap.add_argument("--max-len", type=int, default=128)
     ap.add_argument("--real-weight", type=int, default=3, help="oversample real (non-synthetic) rows this many times")
     ap.add_argument("--label-smoothing", type=float, default=0.05)
@@ -106,6 +107,7 @@ def main(argv=None) -> int:
 
     args = TrainingArguments(
         output_dir=a.out, learning_rate=a.lr, per_device_train_batch_size=a.bs, per_device_eval_batch_size=64,
+        gradient_accumulation_steps=a.grad_accum,
         num_train_epochs=a.epochs, weight_decay=0.01, warmup_ratio=0.06, label_smoothing_factor=a.label_smoothing,
         eval_strategy="epoch", save_strategy="epoch", load_best_model_at_end=True, metric_for_best_model="span_f1",
         greater_is_better=True, save_total_limit=2, logging_steps=50, report_to=[], seed=a.seed,

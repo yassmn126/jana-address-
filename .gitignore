@@ -21,5 +21,7 @@ api/artifacts/*.onnx
 api/artifacts/*.sqlite
 api/artifacts/*.pkl
 api/artifacts/tokenizer.json
+# training runs / logs
+runs/
 # secrets
 .env

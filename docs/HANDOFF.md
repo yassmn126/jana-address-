@@ -60,6 +60,13 @@ train.json ─► label_llm.py ─► labels_llm.jsonl ─► (UI review, Track 
                                                                   calibrate.py ──► api/artifacts/calibrator.pkl
 ```
 
+### B0 — GPU server (univer-gpu6, 2 × A10 23 GB, shared)
+Everything runs from the Mac terminal over the Kerio VPN (cloud agents cannot reach 192.168.124.26).
+`gpu/README.md` has the order: `gpu/bootstrap.sh` (env report + venv + CUDA torch + repo + tests) →
+`gpu/sync.sh` (push data) → `gpu/label_local.sh` (vLLM labeling, data stays on campus) →
+`gpu/train_remote.sh` (tmux, one GPU chosen by free memory, logs in `runs/`). Paste the bootstrap
+summary into the chat before the first training run; confirm the university's allocation policy first.
+
 ### B1 — Labels (day 0–1)
 1. `python -m training.label_llm --input data/train.json --output data/labels_llm.jsonl --limit 100` → read the output, fix the prompt/conventions if needed, then run all (`--resume`).
    Local GPU alternative: `vllm serve Qwen/Qwen2.5-32B-Instruct` → `OPENAI_BASE_URL=... --provider openai-compatible`.
