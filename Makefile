@@ -5,7 +5,7 @@ SAMPLE ?= data/sample_input.json
 GOLD ?= data/sample_output.json
 
 .PHONY: help up down logs test eval parse label-dry label dataset synth train export calibrate eval-dev images save-images offline-test speed web-dev api-dev \
-        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune
+        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -68,6 +68,9 @@ images: ## build both images for amd64 + arm64 (needs docker buildx)
 
 save-images: ## export images for an offline jury machine: docker load -i jana-address-images.tar
 	docker save jana-address-api:latest jana-address-web:latest -o jana-address-images.tar && ls -lh jana-address-images.tar
+
+offline-check: ## build the API image, run it with --network none: start time, schema, jury metric, 1000-record speed, memory
+	docker compose build api && bash scripts/offline_check.sh
 
 offline-test: ## start the stack with NO network and run the sample through it
 	docker network create --internal jana-nonet 2>/dev/null || true
