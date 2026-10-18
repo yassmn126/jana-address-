@@ -685,6 +685,7 @@ mark { padding: 1px 3px; border-radius: 5px; color: var(--text); }
 .ai-check-result { padding: 9px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; }
 .ai-check-result.is-ok { background: var(--brand-soft); color: var(--brand-ink); }
 .ai-check-result.is-flag { background: var(--flag-soft); color: var(--flag-ink); }
+.ai-retry { margin-top: 8px; }
 .ai-diff { margin: 0 0 10px; padding: 0; list-style: none; display: grid; gap: 6px; color: var(--text); }
 .ai-diff li { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto minmax(0, 1fr); align-items: baseline; gap: 8px; overflow-wrap: anywhere; }
 .ai-diff b { font-weight: 500; color: var(--flag-ink); }

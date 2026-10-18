@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { scanConflicts, verifyRecords, type VerifyRow } from "../api";
 import { fmtScore } from "../format";
-import { providerLabel, savedProvider } from "../lib/ai";
+import { providerLabel, saveProvider, savedProvider } from "../lib/ai";
 import { explain, loadCalibrator, type Explanation } from "../lib/explain";
 import { REVIEW_THRESHOLD } from "../stats";
 import { useService } from "../state/service";
@@ -117,16 +117,16 @@ export function AiCheck({ r }: { r: RecordOut }) {
     | { status: "idle" | "busy" | "agree" }
     | { status: "diff"; row: VerifyRow }
     | { status: "queued"; id: string }
-    | { status: "error"; text: string };
+    | { status: "error"; text: string; providerDown?: boolean };
   const [state, setState] = useState<State>({ status: "idle" });
   useEffect(() => { setState({ status: "idle" }); }, [r.id]);
-  const { provider, model } = savedProvider();
+  const [{ provider, model }, setChoice] = useState(savedProvider);
   const input = [{ id: r.orig_id ?? r.id, raw_address: r.raw_address }];
 
-  const run = async () => {
+  const run = async (p = provider, m = model) => {
     setState({ status: "busy" });
     try {
-      const res = await verifyRecords(input, provider, model);
+      const res = await verifyRecords(input, p, m);
       const row = res.records[0];
       const llmError = row?.issues?.find((i) => i.startsWith("llm_error"));
       if (!row) setState({ status: "error", text: "ИИ не вернул ответ" });
@@ -134,8 +134,15 @@ export function AiCheck({ r }: { r: RecordOut }) {
       else if (row.disagreements.length) setState({ status: "diff", row });
       else setState({ status: "agree" });
     } catch (e) {
-      setState({ status: "error", text: e instanceof Error ? e.message : String(e) });
+      const providerDown = (e as { status?: number }).status === 502 && p !== "rules";
+      setState({ status: "error", text: e instanceof Error ? e.message : String(e), providerDown });
     }
+  };
+
+  const useRules = () => {
+    saveProvider("rules", "rules");
+    setChoice({ provider: "rules", model: "rules" });
+    run("rules", "rules");
   };
 
   const queue = async () => {
@@ -156,7 +163,7 @@ export function AiCheck({ r }: { r: RecordOut }) {
           <p className="insp-note">{ai === false ? "недоступна на этом сервере" : `${providerLabel(provider)}${model ? ` · ${model}` : ""}`}</p>
         </div>
         {ai !== false && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={run} disabled={state.status === "busy" || ai === null}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => run()} disabled={state.status === "busy" || ai === null}>
             {state.status === "busy" ? "Сверяю…" : "Сверить"}
           </button>
         )}
@@ -181,7 +188,12 @@ export function AiCheck({ r }: { r: RecordOut }) {
       {state.status === "queued" && (
         <p className="ai-check-result is-flag">Запись в очереди конфликтов. <Link className="link" to={`/conflicts/${encodeURIComponent(state.id)}`}>Открыть</Link></p>
       )}
-      {state.status === "error" && <p className="ai-check-result is-flag">{state.text}</p>}
+      {state.status === "error" && (
+        <div className="ai-check-result is-flag">
+          <p>{state.providerDown ? `«${providerLabel(provider)}» не отвечает на этом сервере: ${state.text}` : state.text}</p>
+          {state.providerDown && <button type="button" className="btn btn-ghost btn-sm ai-retry" onClick={useRules}>Сверить правилами</button>}
+        </div>
+      )}
     </div>
   );
 }

@@ -279,7 +279,8 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
       if (total.needs_review) react("confused", `${count(total.needs_review, ADDRESSES)} из ${total.scanned} требуют решения.`, undefined, 9000);
       else react("happy", `ИИ согласен со всеми ${total.scanned} ответами.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const down = (e as { status?: number }).status === 502 && provider !== "rules";
+      setError(`${down ? `«${PROVIDERS.find((x) => x.id === provider)?.label ?? provider}» не отвечает на этом сервере. Выберите «Только правила». ` : ""}${e instanceof Error ? e.message : String(e)}`);
       react("error", "Сверка с ИИ не выполнена.");
     } finally {
       setScanning(null);
