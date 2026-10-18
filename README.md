@@ -102,7 +102,7 @@ docs/               CONVENTIONS.md · HANDOFF.md · ML.md · ARCHITECTURE.md
 | Gazetteer: OSM Kazakhstan → sqlite (settlements ru/kk, provinces, city districts, 5.3k микрорайоны/ЖК, 50k streets, house-level districts), seed fallback | ✅ `make gazetteer` |
 | Calibrated confidence (logistic + isotonic, JSON, numpy-only at runtime) | ✅ on synthetic + handmade gold — refit on the real dev set |
 | Geocoding (house → street → микрорайон → district → city point, `?explain=1` / `POST /api/v1/geocode`) + suggest (`GET /api/v1/suggest`) | ✅ 97.4 % of real OSM addresses typed messily resolve to the exact building |
-| Robustness (17 metamorphic transformations), adversarial stress set, experiment history, AI cross-check vs an LLM | ✅ `make robustness`, `make history`, `make verify` — docs/ML.md §2a–2c |
+| Robustness (21 metamorphic transformations incl. **wrong keyboard layout** «Fkvfns? ek/ F,fz 10» and Latin lookalikes «Aлмaты»), adversarial stress set, experiment history, AI cross-check vs an LLM | ✅ `make robustness`, `make history`, `make verify` — docs/ML.md §2a–2c, docs/ROBUSTNESS.md |
 | Day 0 on `train.json`: one command — pseudo-labels (+ Claude or a local vLLM as a second labeler), agreement → gold, disagreement → review page, warm-start fine-tune, re-tune, re-calibrate, A/B logged | ✅ `make day0` / `make day0-claude` |
 
 Secrets, personal data and `train.json` are never committed (see `.gitignore`).

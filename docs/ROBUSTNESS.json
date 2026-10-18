@@ -37,7 +37,7 @@
    "changed": 0
   },
   "commas_to_spaces": {
-   "score": 99.04,
+   "score": 98.98,
    "consistency": 98.32,
    "changed": 7
   },
@@ -85,6 +85,26 @@
    "score": 100.0,
    "consistency": 100.0,
    "changed": 0
+  },
+  "homoglyph_30": {
+   "score": 100.0,
+   "consistency": 99.76,
+   "changed": 1
+  },
+  "homoglyph_all": {
+   "score": 99.47,
+   "consistency": 97.6,
+   "changed": 10
+  },
+  "wrong_layout_words": {
+   "score": 98.42,
+   "consistency": 93.75,
+   "changed": 26
+  },
+  "wrong_layout_all": {
+   "score": 99.58,
+   "consistency": 98.32,
+   "changed": 7
   }
  },
  "categories": {

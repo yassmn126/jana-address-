@@ -1,0 +1,59 @@
+[
+ {
+  "raw_address": "Актау 15 мкр 35 д. корпус 2 кв 10",
+  "fields": {
+   "province": null,
+   "city": "Актау",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "15",
+   "house": "35/2",
+   "apartment": "10",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Қонаев қаласы, 4 ықшам аудан, 15 үй Б блогы, 21 пәтер",
+  "fields": {
+   "province": null,
+   "city": "Конаев",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "4",
+   "house": "15/Б",
+   "apartment": "21",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Темиртау, пр. Металлургов 26 литер А",
+  "fields": {
+   "province": null,
+   "city": "Темиртау",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Металлургов",
+   "house": "26/А",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ }
+]

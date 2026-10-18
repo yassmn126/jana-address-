@@ -41,6 +41,55 @@ _WS = re.compile(r"\s+")
 _ESCAPES = re.compile(r"\\(?:u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[ntr])")   # literal «\u00a0», «\n» from broken exports
 
 
+# ЙЦУКЕН ↔ QWERTY: the same physical key in the other layout («Алматы» typed as «Fkvfns», «ул» as «ek», «дом» as «ljv»)
+_RU_KEYS = "йцукенгшщзхъфывапролджэячсмитьбю.ЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ,ё"
+_EN_KEYS = "qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?`"
+EN2RU = str.maketrans(_EN_KEYS, _RU_KEYS)
+RU2EN = str.maketrans(_RU_KEYS, _EN_KEYS)
+_LATIN_VOWELS = set("aeiouyAEIOUY")
+_CYR_VOWELS = set("аеёиоуыэюяАЕЁИОУЫЭЮЯӘәӨөҰұҮүІі")
+KAZAKH_ONLY = set("ӘәҒғҚқҢңӨөҰұҮүҺһІі")          # letters with no QWERTY key: they survive inside a wrong-layout word
+RUSSIAN_LETTERS = re.compile(r"[А-Яа-яЁё]")
+
+
+def layout_to_ru(text: str, full: bool = False) -> str:
+    """QWERTY → ЙЦУКЕН key by key (same length), for recognition and for comparing values, never for output.
+    Partial (a Latin chunk inside a Cyrillic string): letters, and a punctuation key only between two letters
+    («F,fz» → «Абая», a trailing «,» stays a comma). Full (the whole string was typed in the wrong layout): every key —
+    «?» is the comma, «/» the period, «,» is «б» — except a «/» between digits, which is a real fraction («49/2»)."""
+    out = []
+    n = len(text)
+    for i, ch in enumerate(text):
+        if ch.isascii() and ch.isalpha():
+            out.append(ch.translate(EN2RU))
+        elif ch in _EN_KEYS and full and not (ch == "/" and 0 < i < n - 1 and text[i - 1].isdigit() and text[i + 1].isdigit()):
+            out.append(ch.translate(EN2RU))
+        elif ch in _EN_KEYS and 0 < i < n - 1 and text[i - 1].isascii() and text[i - 1].isalpha() \
+                and text[i + 1].isascii() and text[i + 1].isalpha():
+            out.append(ch.translate(EN2RU))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+_LAYOUT_PUNCT = re.compile(r"[\[\]{};:'\"<>](?=[A-Za-z])|(?<=[A-Za-z])[\[\]{};:'\"<>]")   # «[» = х, «;» = ж, «"» = э next to a letter
+
+
+def looks_wrong_layout(chunk: str) -> bool:
+    """A chunk of Latin letters that is not a Latin word («Fkvfns», «ljv», «Ty,tribrfpf[crbq», «{fy»): a bracket / quote key
+    next to a letter, no Latin vowel, or (5+ letters) a vowel share ≤ 20 % — while the ЙЦУКЕН reading has a Cyrillic vowel."""
+    letters = [ch for ch in chunk if ch.isalpha() and ch not in KAZAKH_ONLY]
+    if len(letters) < 2 or not all(ch.isascii() for ch in letters):
+        return False                                       # «kıreberıs», «úi»: Kazakh Latin letters never come from a wrong layout
+    if not any(ch in _CYR_VOWELS for ch in layout_to_ru("".join(letters), full=True)):
+        return False                                       # the LETTERS must read as a word («mkr» → «ьлк» does not)
+    if _LAYOUT_PUNCT.search(chunk):
+        return True
+    low = "".join(letters).lower()                     # (no «q» rule: Kazakh Latin has «Aqtau», «yqsham», «Qostanai»)
+    vowels = sum(1 for ch in low if ch in _LATIN_VOWELS)
+    return vowels == 0 or (len(low) >= 5 and vowels / len(low) <= 0.2)
+
+
 def clean(raw: str) -> str:
     """Same-length copy of `raw` with invisible chars, exotic spaces and literal escape sequences → ' '."""
     raw = _ESCAPES.sub(lambda m: " " * len(m.group(0)), raw)

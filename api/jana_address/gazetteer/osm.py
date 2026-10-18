@@ -239,6 +239,13 @@ class Gazetteer:
         return rows[0] if rows else None
 
     @lru_cache(maxsize=4096)
+    def street_anywhere(self, name: str) -> bool:
+        """Is this street name («Туран», «Бухар-Жырау») known in any settlement? (for wrong-layout recognition)"""
+        key = norm(name)
+        return bool(key) and bool(self._q("SELECT 1 FROM street_names WHERE norm = ? LIMIT 1", (key,))
+                                  or self._q("SELECT 1 FROM streets WHERE base_norm = ? LIMIT 1", (key,)))
+
+    @lru_cache(maxsize=4096)
     def living_base_anywhere(self, name: str) -> bool:
         """Is this exact living-area / microdistrict name («Аксай 4», «Пришахтинск») known in any settlement?"""
         key = norm(name)

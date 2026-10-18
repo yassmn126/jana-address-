@@ -28,7 +28,7 @@ def _val(rp: RuleParse, field: str) -> str | None:
     sp = rp.spans.get(field)
     if not sp:
         return None
-    return extract(rp.raw, sp.start, sp.end)
+    return extract(rp.meta.get("value_text") or rp.raw, sp.start, sp.end)   # value_text: a whole wrong-layout string, read right
 
 
 def _number(v: str | None) -> str | None:

@@ -122,6 +122,34 @@ jury image answers `/api/v1/verify` with 503. Do not send `train.json` to an ext
 republican city, and a gold-label inconsistency (open question Q14 in CONVENTIONS.md). Run it with `bash scripts/verify_with_claude.sh`
 (key from a hidden prompt / the clipboard, never echoed) or with no key at all after `ant auth login`.
 
+### Wrong keyboard layout and Latin lookalikes
+
+Two corruptions real users produce without noticing: the keyboard left in the Latin layout («Алматы, ул. Абая 10» typed as
+«Fkvfns? ek/ F,fz 10»), and single Latin lookalikes inside Cyrillic words («Aлмaты», «yл.», «кв» as «kb»). Lookalikes were
+already folded for dictionary matching (`match_view`); the wrong layout needed a pass of its own (`grammar._layout_fix`):
+
+* every whitespace chunk with Latin letters and no Russian ones is read as ЙЦУКЕН keys; it is a *hit* when that reading
+  is a lexicon keyword, a city, a settlement, a street or a living area of the gazetteer (`ek` → ул, `rd` → кв,
+  `Fkvfns` → Алматы, `Nehfy` → Туран), or when it cannot be a Latin word (a bracket / quote key next to a letter —
+  «[» is х, «;» is ж — no Latin vowel, or 20 % vowels or less in 5+ letters);
+* a hit is remapped in place (same length, so every offset into the raw string holds); real Latin keywords («mkr», «kv»,
+  «street»), Kazakh Latin words («Aqtau», «shaǵyn», «üi») and lone letters («E 26» is an Astana street) never are;
+* when the whole string has no Russian letters and most chunks are hits, the whole string is read as ЙЦУКЕН (`?` is the
+  comma key, `/` the period key) and the **values are the intended text** («Экибастуз», not «"rb,fcnep»); plausible Latin
+  words inside it («Esentai City») are kept. With only some chunks fixed, values stay as written and only recognition
+  (and the gazetteer lookups, through the tokens' reading) uses the fix.
+
+`make robustness` has four such transformations; `api/tests/test_robustness.py` keeps the floors:
+
+| transformation | jury score | records unchanged |
+|---|---|---|
+| homoglyph_30 (30 % of lookalike letters Latin) | 100.00 | 99.8 % |
+| homoglyph_all (every lookalike letter Latin) | 99.47 | 97.6 % |
+| wrong_layout_words (a quarter of the words) | 98.42 | 93.8 % |
+| wrong_layout_all (the whole string) | 99.58 | 98.3 % |
+
+Before the pass, a quarter of wrong-layout words cost 30 points (68–73 on the hand-labeled sets).
+
 ## 2c. Geocoding and suggest — what Yandex / 2GIS address stacks do, offline
 
 The brief's pain points include «не считается автоматически зона доставки»: an address string has no coordinates. The gazetteer

@@ -1,0 +1,116 @@
+[
+ {
+  "raw_address": "Батыс Қазақстан облысы, Бөрлі ауданы, Ақсай қаласы, Мир көшесі 5, 40 пәтер",
+  "fields": {
+   "province": "Западно-Казахстанская область",
+   "city": "Аксай",
+   "district": "Бөрлі",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Мир",
+   "house": "5",
+   "apartment": "40",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:city"
+  ]
+ },
+ {
+  "raw_address": "Уральск, ул. Евразия 101 литер А, офис 3",
+  "fields": {
+   "province": null,
+   "city": "Уральск",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Евразия",
+   "house": "101/А",
+   "apartment": "3",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Семей, Шакарима 18 к1 кв 56",
+  "fields": {
+   "province": null,
+   "city": "Семей",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Шакарима",
+   "house": "18/1",
+   "apartment": "56",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматинская обл, Карасайский р-н, г. Каскелен, ул. Наурызбай батыра 32 литер Б",
+  "fields": {
+   "province": "Алматинская область",
+   "city": "Каскелен",
+   "district": "Карасайский",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Наурызбай батыра",
+   "house": "32/Б",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Рудный, ул. Ленина 112 кор. 2 кв. 9",
+  "fields": {
+   "province": null,
+   "city": "Рудный",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Ленина",
+   "house": "112/2",
+   "apartment": "9",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "павлодарская обл/ аксу / ул.ауэзова 12\"б\" / кв 7",
+  "fields": {
+   "province": "Павлодарская область",
+   "city": "аксу",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "ауэзова",
+   "house": "12б",
+   "apartment": "7",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ }
+]
