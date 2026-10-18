@@ -43,6 +43,20 @@ _CITY_PREFIX = re.compile(r"^(?:г|гор|город|пос|п|пгт|с|сел�
 _CITY_SUFFIX = re.compile(r"\s+(?:қаласы|каласы|ауылы|кенті|кенти|қ|г)\.?$", re.IGNORECASE)
 
 
+def _trim_unbalanced(v: str | None) -> str | None:
+    """«угол Байзакова)» → «угол Байзакова»: a closing bracket / quote with no opening one is not part of the value."""
+    if not v:
+        return v
+    for o, c in (("(", ")"), ("«", "»"), ("[", "]")):
+        if v.endswith(c) and o not in v:
+            v = v[:-1].rstrip()
+        if v.startswith(o) and c not in v:
+            v = v[1:].lstrip()
+    if v.count('"') == 1:
+        v = v.strip('"').strip()
+    return v or None
+
+
 def _strip_settlement_words(city: str) -> str:
     """The city value is the name only (brief): «Тұрар Рысқұлов ауылы» → «Тұрар Рысқұлов», «г. Алматы» → «Алматы»."""
     out = _CITY_SUFFIX.sub("", _CITY_PREFIX.sub("", city)).strip()
@@ -78,7 +92,7 @@ def assemble(rp: RuleParse) -> tuple[dict, dict]:
 
     for f, key in (("district", "DISTRICT"), ("living_area", "LIVING_AREA"), ("street_name", "STREET_NAME"),
                    ("landmark", "LANDMARK")):
-        v = _val(rp, key)
+        v = _trim_unbalanced(_val(rp, key))
         if v:
             fields[f] = v
             prov[f] = "string"

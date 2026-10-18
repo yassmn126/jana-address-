@@ -2667,7 +2667,7 @@
   "apartment": null,
   "entrance": null,
   "floor": null,
-  "landmark": null
+  "landmark": "остановкой"
  },
  {
   "id": "hm_137",
@@ -6003,7 +6003,7 @@
   "id": "ru_025",
   "raw_address": "Қазығұрт ауданы, Қазығұрт ауылы, Абай көшесі 15",
   "province": null,
-  "city": "Казыгурт",
+  "city": "Қазығұрт",
   "district": "Қазығұрт",
   "living_area": null,
   "street_type": "улица",

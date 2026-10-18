@@ -14,6 +14,7 @@ import threading
 from functools import lru_cache
 from pathlib import Path
 
+from ..preprocess import match_view
 from ..rules.grammar import Lexicon, get_lexicon
 from .names import base_of_numbered, norm
 
@@ -170,7 +171,9 @@ class Gazetteer:
             return None, None
         key = norm(written)
         seed = self._seed_cities.get(key)
-        if seed and seed.get("kk") and norm(seed["kk"]) == key and norm(seed["name"]) != key:
+        literal_kk = seed and seed.get("kk") and (match_view(written) == match_view(seed["kk"])
+                                                  or re.search(r"[әғқңөұүһіӘҒҚҢӨҰҮҺІ]", written))
+        if seed and seed.get("kk") and norm(seed["kk"]) == key and norm(seed["name"]) != key and literal_kk:
             return seed["name"], SEED
         s = self.settlement(written)
         if s and s["kk"] and norm(s["kk"]) == key and s["name"] and norm(s["name"]) != key \

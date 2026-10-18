@@ -59,6 +59,8 @@ def enrich(fields: dict, prov: dict, rp: RuleParse, gz: Gazetteer | None = None)
                 src = "string+fuzzy" if fz["province"] == fz["name"] else "gazetteer:fuzzy"
                 rp.flags.append("city_fuzzy_match")
         if p:
+            if p in ("Алматы", "Астана", "Шымкент") and str(prov.get("city") or "").startswith("string"):
+                src = "string+table"                 # the city of republican significance IS in the string
             fields["province"], prov["province"] = p, src
 
     # 3. a free word chunk that is a known микрорайон / ЖК of this city → living_area (it is IN the string)

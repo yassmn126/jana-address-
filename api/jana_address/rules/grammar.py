@@ -37,6 +37,7 @@ HERE = Path(__file__).parent
 DETAIL_FIELDS = ("APARTMENT", "ENTRANCE", "FLOOR")
 NUMBER_FIELDS = ("HOUSE",) + DETAIL_FIELDS
 ADJ_SUFFIXES = ("ский", "ская", "ской", "ское", "кий", "кая", "ной", "ный", "ная", "ий", "ый", "ая")
+TIME_WORDS = {"час", "часа", "часов", "минут", "минуту", "минуты", "день", "дня", "сутки", "неделю", "полчаса"}
 CODE_WORDS = {"код", "кодом", "домофон", "домофона", "intercom", "пин"}
 CITY_WORDS_URBAN = {"город", "г", "гор", "қаласы", "каласы", "қ", "қала", "кала"}
 _HOUSE_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?$")
@@ -93,6 +94,13 @@ class Lexicon:
                 continue  # cities of republican significance are derived from the city, not matched as province
             for v in p["variants"]:
                 self.province_by_variant[match_view(v)] = p
+            # colloquial «Костанай обл», «Актобе область», «Ақтөбе обл.»: regional centre or Kazakh stem + region word
+            stems = {p.get("center") or ""}
+            if p.get("kk", "").endswith(" облысы"):
+                stems.add(p["kk"][: -len(" облысы")])
+            for stem in filter(None, stems):
+                for w in ("обл", "область", "облысы"):
+                    self.province_by_variant.setdefault(match_view(f"{stem} {w}"), p)
         self.province_of_city_name: dict[str, str] = {}   # Астана/Нур-Султан/… -> canonical
         for p in self.provinces:
             if p.get("city"):
@@ -1019,6 +1027,12 @@ class RuleParser:
                 continue
             idxs = [] if t.meta.get("marker_only") else [i]
             k = i + 1
+            if t.meta.get("marker_only"):
+                while k < n and norm_token(toks[k].text) in ("с", "со", "от"):    # «рядом с мечетью», «напротив от …»
+                    toks[k].label = "O"
+                    k += 1
+                if k < n and norm_token(toks[k].text) in TIME_WORDS:
+                    continue                                                       # «звонить за час»
             while k < n and self._free(toks[k]) and not toks[k].is_sep:
                 tk = toks[k]
                 if tk.kind == "WORD" and not self._is_kw(tk):

@@ -118,3 +118,24 @@ def test_region_named_streets(raw, province, street, house):
     assert (out["street_name"], out["house"]) == (street, house)
     if province:
         assert out["province"] == province
+
+
+@pytest.mark.parametrize("raw,province", [
+    ("Костанай обл, г. Рудный, ул. Ленина 112 кв 23", "Костанайская область"),    # regional centre + «обл» (found by Claude)
+    ("Актобе область, Хромтау, Абая 5", "Актюбинская область"),
+    ("Ақтөбе обл., Алга, Абая 1", "Актюбинская область"),
+    ("Алматы обл, Талгар, Кунаева 75", "Алматинская область"),                    # NOT the city Алматы
+])
+def test_colloquial_province_names(raw, province):
+    out = parse_one("x", raw, explain=True)
+    assert out["province"] == province and out["provenance"]["province"] == "string+table"
+
+
+def test_findings_of_the_claude_cross_check():
+    assert parse_one("x", "Байконыр ул Абая 5")["city"] == "Байконыр"           # look-alike, not the Kazakh form
+    assert parse_one("x", "Орал қаласы, Абай 5")["city"] == "Уральск"           # literal Kazakh form of a known city
+    assert parse_one("x", "Алматы, ул. Абая 10")["city"] == "Алматы"
+    assert parse_one("x", "Шымкент, Тауке хана 23, рядом с мечетью")["landmark"] == "мечетью"
+    assert parse_one("x", "Караганда, Бухар жырау 49, кв 3, звонить за час")["landmark"] is None
+    out = parse_one("x", "Алмты, ул Абая 15", explain=True)
+    assert out["province"] == "Алматы" and out["provenance"]["province"] == "string+table"

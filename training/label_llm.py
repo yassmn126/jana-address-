@@ -84,7 +84,10 @@ def label_with_anthropic(batch: list[dict], system: str, model: str, usage: dict
     a 400 is a bug in the request and is raised immediately. Large stable system prompt → prompt caching."""
     import anthropic  # lazy import: not needed for --provider rules
 
-    client = anthropic.Anthropic(max_retries=6)
+    # user-scoped keys (sk-ant-usr-…) are not tied to a workspace: the API then needs the workspace to bill
+    workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    extra = {"default_headers": {"anthropic-workspace-id": workspace}} if workspace else {}
+    client = anthropic.Anthropic(max_retries=6, **extra)
     resp = client.beta.messages.create(
         model=model,
         max_tokens=16000,
