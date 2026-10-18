@@ -160,6 +160,7 @@ class RuleParser:
             rp.flags.append("empty")
             return rp
         self._split_glued_dom(rp)
+        self._phones(rp)
         self._classify(rp)
         self._province(rp)
         self._bind_numbers(rp, phase=1)      # glued + unambiguous keyword↔number pairs
@@ -267,6 +268,34 @@ class RuleParser:
     def _is_kw(self, t: Token) -> bool:
         return bool(t.role) and t.role not in ("noise",)
 
+    def _phones(self, rp: RuleParse):
+        """«87011234567», «+7 701 555 44 33», «8 (777) 123-45-67» → O (never a house / apartment)."""
+        toks = rp.tokens
+        n = len(toks)
+        i = 0
+        while i < n:
+            t = toks[i]
+            if t.kind == "NUM" and len(t.text) >= 9:
+                t.label, t.role = "O", "phone"
+                rp.flags.append("phone")
+                i += 1
+                continue
+            j = i + 1 if t.text == "+" else i
+            if j < n and toks[j].kind == "NUM" and toks[j].text in ("7", "8"):
+                k, digits, idxs = j + 1, 1, [i, j] if j != i else [j]
+                while k < n and (toks[k].kind == "NUM" or toks[k].text in ("(", ")", "-")) and digits < 11:
+                    if toks[k].kind == "NUM":
+                        digits += len(toks[k].text)
+                    idxs.append(k)
+                    k += 1
+                if digits == 11:
+                    for x in idxs:
+                        toks[x].label, toks[x].role = "O", "phone"
+                    rp.flags.append("phone")
+                    i = k
+                    continue
+            i += 1
+
     def _split_glued_dom(self, rp: RuleParse):
         """«5мкр 12д 34кв»: when other numbers in the string are glued to keywords, «12д» is «12» + «д(ом)»,
         not a house with the letter Д. Splits the ALNUM token in place (offsets unchanged)."""
@@ -289,6 +318,8 @@ class RuleParser:
     def _classify(self, rp: RuleParse):
         toks = rp.tokens
         for i, t in enumerate(toks):
+            if t.role == "phone":
+                continue
             if t.kind == "NUM" and len(t.text) == 6 and i + 1 < len(toks) and not toks[i + 1].is_number_like:
                 t.label, t.role = "O", "postcode"
                 rp.flags.append("postcode")

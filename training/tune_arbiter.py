@@ -28,11 +28,12 @@ from jana_address.assembly.canon import assemble  # noqa: E402
 from jana_address.gazetteer.enrich import enrich  # noqa: E402
 from jana_address.service import get_parser, get_tagger  # noqa: E402
 
-GRID = {                         # 320 policies; deliberately coarse — the dev sets are small
+GRID = {                         # 960 policies; deliberately coarse — the dev sets are small
     "tau_solo": [0.3, 0.5, 0.7, 0.85],
     "tau_field": [0.5, 0.65, 0.8, 0.9, 0.95],
     "tau_override": [0.9, 0.95, 0.98, 1.01],
     "tau_weak": [0.3, 0.45, 0.6, 0.75],
+    "tau_veto": [0.9, 0.97, 1.01],
 }
 
 
@@ -41,16 +42,16 @@ def prepare(gold: list[dict]):
     cache = []
     for g in gold:
         rp = parser.parse(g["raw_address"])
-        spans, _, _ = tagger.tag(rp.tokens)
-        cache.append((rp, spans))
+        spans, labels, probs = tagger.tag(rp.tokens)
+        cache.append((rp, spans, labels, probs))
     return cache
 
 
 def evaluate(cache, gold, policy, parser) -> float:
     preds = []
-    for (rp0, spans), g in zip(cache, gold):
+    for (rp0, spans, labels, probs), g in zip(cache, gold):
         rp = copy.deepcopy(rp0)
-        arbitrate(rp, spans, parser, policy=policy)
+        arbitrate(rp, spans, parser, policy=policy, tok_labels=labels, tok_probs=probs)
         fields, prov = assemble(rp)
         enrich(fields, prov, rp)
         preds.append({"id": g["id"], **fields})

@@ -24,7 +24,13 @@ FIELDS = ["PROVINCE", "CITY", "DISTRICT", "LIVING_AREA", "STREET_TYPE", "STREET_
           "HOUSE", "APARTMENT", "ENTRANCE", "FLOOR", "LANDMARK"]
 KEYWORD_RULES = {"kw_glued", "kw_prev", "kw_next"}
 # positional guesses of the grammar (no keyword evidence): the model may override them more easily
-WEAK_RULES = {"fallback_word_number", "house_fallback", "city_seed", "after_street", "micro_as_living", "gazetteer_chunk"}
+WEAK_RULES = {"fallback_word_number", "house_fallback", "city_seed", "after_street", "micro_as_living", "gazetteer_chunk",
+              "fallback_word_sep_number", "after_street_sep", "leftover_chunk", "fallback_micro_number", "dash_after_house",
+              "city_fuzzy"}
+# spans whose boundaries come from an explicit keyword («район Есиль», «г. Алматы», «ЖК Томирис», «Актюбинская обл»):
+# they win overlaps against model spans
+ANCHORED_RULES = KEYWORD_RULES | {"district_kw", "city_kw", "city_kk_suffix", "living_kw", "province_table", "type_kw"}
+COUNTRY = {"казахстан", "kazakhstan", "рк", "kz", "республика казахстан", "қазақстан", "казакстан"}
 HOUSE_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?(/\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?)?$")
 NUM_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?$")
 
@@ -33,10 +39,12 @@ DEFAULT_POLICY = {
     "tau_field": 0.70,         # model beats a conflicting rule span above this
     "tau_override": 0.95,      # model beats a keyword-bound rule span above this
     "tau_weak": 0.55,          # model beats a WEAK (positional) rule span above this
+    "tau_veto": 1.01,          # a WEAK rule span with no model span is dropped when the model says O this surely (>1 = off)
     "field_tau": {"STREET_NAME": 0.65, "HOUSE": 0.75, "CITY": 0.70, "LANDMARK": 0.60},
 }
 # model-only mode (eval/ab.py): rule spans are ignored, every valid model span is taken
-MODEL_ONLY = {"tau_solo": 0.0, "tau_field": 0.0, "tau_override": 0.0, "tau_weak": 0.0, "field_tau": {}, "ignore_rules": True}
+MODEL_ONLY = {"tau_solo": 0.0, "tau_field": 0.0, "tau_override": 0.0, "tau_weak": 0.0, "tau_veto": 1.01, "field_tau": {},
+              "ignore_rules": True}
 
 
 def _load_policy() -> dict:
@@ -61,6 +69,11 @@ def _ok(rp: RuleParse, field: str, start: int, end: int) -> bool:
     text = extract(rp.raw, start, end)
     if not text or not re.search(r"[^\W_]", text):        # «???», «-», «,» are never a value
         return False
+    if any(t.role == "phone" for t in rp.tokens if t.start >= start and t.end <= end):
+        return False                                       # phone numbers are never a value
+    if field in ("STREET_NAME", "CITY", "DISTRICT", "LIVING_AREA") and match_view(text) in COUNTRY \
+            and not rp.raw[:start].strip(" ,.;\ufeff"):
+        return False                                       # «Казахстан, дом 10» — the country, not «ул. Казахстан»
     if field == "HOUSE":
         return bool(HOUSE_RE.match(text.replace(" ", "")))
     if field in ("APARTMENT", "ENTRANCE", "FLOOR"):
@@ -86,12 +99,22 @@ def province_lookup(parser: RuleParser, text: str) -> dict | None:
     return None
 
 
+def _model_says_o(rp: RuleParse, span: Span, labels: list[str], probs: list[float] | None, tau: float) -> bool:
+    """Every token of the rule span is O for the tagger with probability ≥ tau."""
+    idx = [i for i, t in enumerate(rp.tokens) if t.start >= span.start and t.end <= span.end]
+    if not idx or tau > 1.0:
+        return False
+    return all(labels[i] == "O" and (probs is None or probs[i] >= tau) for i in idx)
+
+
 def _free_of(final: dict, span: Span, field: str) -> bool:
     return all(s.end <= span.start or s.start >= span.end for f, s in final.items() if f != field)
 
 
-def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, policy: dict | None = None) -> None:
-    """Mutates rp.spans / rp.tokens / rp.meta / rp.flags in place."""
+def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, policy: dict | None = None,
+              tok_labels: list[str] | None = None, tok_probs: list[float] | None = None) -> None:
+    """Mutates rp.spans / rp.tokens / rp.meta / rp.flags in place.
+    tok_labels / tok_probs (the tagger's per-token output) enable the model veto on weak rule spans."""
     policy = policy or POLICY
     ignore_rules = policy.get("ignore_rules", False)
     best_model: dict[str, ModelSpan] = {}
@@ -108,6 +131,9 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
             final[f] = Span(f, r.start, r.end, f"agree:{r.rule}", max(r.score, m.prob))
             rp.flags.append(f"arb_{f.lower()}_agree")
         elif r and not m:
+            if r.rule in WEAK_RULES and tok_labels and _model_says_o(rp, r, tok_labels, tok_probs, policy.get("tau_veto", 1.01)):
+                rp.flags.append(f"arb_{f.lower()}_model_veto")
+                continue
             final[f] = r
             rp.flags.append(f"arb_{f.lower()}_rule_only")
         elif m and not r:
@@ -128,12 +154,21 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
                 rp.flags.append(f"arb_{f.lower()}_rule_wins")
         # neither: nothing
 
-    # overlap resolution between different fields: keep the higher score
-    accepted = sorted(final.values(), key=lambda s: -s.score)
+    # overlap resolution between different fields: keyword-anchored rule spans first, then the higher score;
+    # a model span that loses falls back to the rule span of its field when that one still fits
+    def anchored(sp: Span) -> bool:
+        rule = sp.rule[6:] if sp.rule.startswith("agree:") else sp.rule
+        return rule in ANCHORED_RULES
+
+    accepted = sorted(final.values(), key=lambda s: (not anchored(s), -s.score))
     kept: list[Span] = []
     for s in accepted:
         if any(not (s.end <= k.start or s.start >= k.end) for k in kept):
             rp.flags.append(f"arb_{s.field.lower()}_overlap_dropped")
+            r = None if ignore_rules else rp.spans.get(s.field)
+            if s.rule == "model" and r is not None and all(r.end <= k.start or r.start >= k.end for k in kept):
+                kept.append(r)
+                rp.flags.append(f"arb_{s.field.lower()}_rule_restored")
             continue
         kept.append(s)
     final = {s.field: s for s in kept}

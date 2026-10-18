@@ -35,7 +35,7 @@ def _number(v: str | None) -> str | None:
     if v is None:
         return None
     v = _NUM_ONLY.sub("", v).strip("/")
-    v = re.sub(r"(?<=\d)[йя]$", "", v)            # glued ordinal: «2й подъезд», «3я» → 2, 3 (й/я are never apartment letters)
+    v = re.sub(r"(?<=\d)[йяЙЯ]$", "", v)            # glued ordinal: «2й подъезд», «3я» → 2, 3 (й/я are never apartment letters)
     return v or None
 
 

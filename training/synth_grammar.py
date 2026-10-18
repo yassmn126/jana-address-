@@ -105,7 +105,8 @@ STREET_KW_AFTER = {
 }
 LANDMARK_KIND = [("магазин", 30), ("маг.", 3), ("ТЦ", 12), ("ТРЦ", 5), ("супермаркет", 3), ("рынок", 3), ("школа", 6),
                  ("аптека", 3), ("остановка", 2), ("БЦ", 3), ("кафе", 2), ("банк", 1), ("мечеть", 1), ("ТД", 2)]
-NOISE_TAIL = ["тел 8701{d7}", "тел. +7 707 {d3} {d2} {d2}", "+77{d9}", "позвонить заранее", "оставить у двери",
+NOISE_TAIL = ["тел 8701{d7}", "тел. +7 707 {d3} {d2} {d2}", "+77{d9}", "8 (701) {d3}-{d2}-{d2}", "+7 (777) {d3} {d2} {d2}",
+              "тел: 8-702-{d3}-{d2}-{d2}", "8 747 {d3} {d2} {d2}", "позвонить заранее", "оставить у двери",
               "домофон {d2}", "код {d4}", "до 18:00", "доставка", "звонить перед доставкой", "вход со двора",
               "самовывоз", "оплата при получении"]
 PREFIX = [("Казахстан", 10), ("Республика Казахстан", 5), ("РК", 8), ("Kazakhstan", 2), ("KZ", 1)]
@@ -411,10 +412,13 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             return False
         if kk:
             r.add(name, "district"); r.sp(); r.add(wpick(rnd, KW_KK["district_after"]))
-        elif rnd.random() < 0.75 or not name.endswith(("ский", "ской", "кий")):
-            r.add(name, "district"); r.sp(); r.add(wpick(rnd, KW["district_after"]))
         else:
-            r.add(wpick(rnd, KW["district_before"])); r.sp(); r.add(name, "district")
+            adjective = name.endswith(("ский", "ской", "кий", "цкий"))
+            # «Медеуский район» (adjective first, the norm) vs «район Есиль» / «район Алматы» (Astana's official order)
+            if rnd.random() < (0.85 if adjective else 0.45):
+                r.add(name, "district"); r.sp(); r.add(wpick(rnd, KW["district_after"]))
+            else:
+                r.add(wpick(rnd, KW["district_before"])); r.sp(); r.add(name, "district")
         g["district"] = name
         return True
 
