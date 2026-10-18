@@ -95,3 +95,26 @@ def test_verify_endpoint_with_rules_provider():
         body = r.json()
         assert body["summary"]["n"] == 2 and {x["id"] for x in body["records"]} == {"1", "2"}
         assert c.post("/api/v1/verify?provider=rules", json=[{"id": str(i), "raw_address": "x"} for i in range(51)]).status_code == 413
+
+
+def test_workspace_header_for_user_scoped_keys(monkeypatch):
+    seen = {}
+
+    class _Messages:
+        def create(self, **kw):
+            ids = [r["id"] for r in json.loads(kw["messages"][0]["content"].split("\n", 1)[1])]
+            return _Resp([_rec(i) for i in ids])
+
+    class _Client:
+        def __init__(self, **kw):
+            seen.update(kw)
+            self.beta = types.SimpleNamespace(messages=_Messages())
+
+    monkeypatch.setitem(sys.modules, "anthropic", types.SimpleNamespace(Anthropic=_Client))
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "wrkspc_test")
+    label_llm.label_with_anthropic([{"id": "a", "raw_address": "Абая 10"}], "SYS", "m", {"input": 0, "output": 0})
+    assert seen["default_headers"] == {"anthropic-workspace-id": "wrkspc_test"}
+    monkeypatch.delenv("ANTHROPIC_WORKSPACE_ID")
+    seen.clear()
+    label_llm.label_with_anthropic([{"id": "a", "raw_address": "Абая 10"}], "SYS", "m", {"input": 0, "output": 0})
+    assert "default_headers" not in seen

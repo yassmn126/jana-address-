@@ -258,6 +258,22 @@ def main(argv=None) -> int:
         print("No Claude credentials: export ANTHROPIC_API_KEY=... or run `ant auth login`; "
               "or use --provider openai-compatible with a local vLLM (OPENAI_BASE_URL).", file=sys.stderr)
         return 2
+    except Exception as e:  # noqa: BLE001 — anthropic.* errors without importing the SDK here
+        name, msg = type(e).__name__, str(getattr(e, "message", e))
+        if name in ("AuthenticationError", "PermissionDeniedError"):
+            print(f"Claude rejected the key ({name}): check it in the Anthropic Console.", file=sys.stderr)
+            return 3
+        if name == "BadRequestError" and "workspace" in msg:
+            print("This key is not scoped to a workspace. Set ANTHROPIC_WORKSPACE_ID to the workspace ID "
+                  "(Anthropic Console → Settings → Workspaces, it looks like wrkspc_…) and run again.", file=sys.stderr)
+            return 4
+        if name in ("APIConnectionError", "APITimeoutError"):
+            print("Could not reach the Claude API (network, or an invalid character in the key / headers).", file=sys.stderr)
+            return 6
+        if name.endswith("Error") and hasattr(e, "status_code"):
+            print(f"Claude API error {e.status_code}: {msg}", file=sys.stderr)
+            return 5
+        raise
     write_outputs(Path(a.out), result)
     s = result["summary"]
     print(json.dumps(s, ensure_ascii=False, indent=1))

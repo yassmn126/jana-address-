@@ -53,6 +53,8 @@ Switches live in `api/jana_address/rules/conventions.yaml`; examples in `data/co
 | Q12 | Latin city («Astana») | as written | T | — |
 | Q13 | «оф.»/«каб.» → apartment | yes | T | `office_as_apartment` |
 
+| Q14 | Kazakh-spelled village the gazetteer has no Russian name for («Қазығұрт ауылы») | as written («Қазығұрт»); Claude Opus 5.5 prefers the letter-folded «Казыгурт». «Байконыр» (no Kazakh letters) stays as written, «Орал» → «Уральск» (literal Kazakh form of a known city) | **?** | `gazetteer/osm.py: city_ru` |
+
 Still worth one message to the organizers: **Q4** (province names) and **Q6** (ЖК) — both are one-line switches once answered.
 
 ## Review checklist (for the human verification sprint)
