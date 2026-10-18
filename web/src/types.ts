@@ -28,6 +28,7 @@ export interface RecordOut {
   // UI state
   edited?: boolean; reviewed?: boolean;
   original?: Record<Field, string | null>;   // field values before the first manual edit
+  orig_id?: string;                         // the file's id when it repeated and the UI added a ~N suffix
 }
 
 /** Geocoder answer attached in explain mode (api/jana_address/gazetteer/osm.py · geocode). */

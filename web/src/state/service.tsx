@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getRunStats, getVersion, health, listConflicts, listRuns } from "../api";
+import { aiAvailable, getRunStats, getVersion, health, listConflicts, listRuns } from "../api";
 import type { Run, RunStats, VersionInfo } from "../types";
 import { useAssistant } from "./assistant";
 
@@ -7,6 +7,7 @@ import { useAssistant } from "./assistant";
 interface ServiceCtx {
   apiOk: boolean | null;          // null until the first /health answer
   version: VersionInfo | null;
+  ai: boolean | null;             // does this API build carry the AI cross-check tooling (/verify, /conflicts/scan)
   conflictsPending: number;
   setConflictsPending: (n: number) => void;
   runs: Run[] | null;             // null: not loaded or archive unavailable
@@ -23,6 +24,7 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
   const { react } = useAssistant();
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [version, setVersion] = useState<VersionInfo | null>(null);
+  const [ai, setAi] = useState<boolean | null>(null);
   const [conflictsPending, setConflictsPending] = useState(0);
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [runStats, setRunStats] = useState<RunStats | null>(null);
@@ -42,10 +44,11 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
     prevOk.current = apiOk;
   }, [apiOk, react]);
 
-  // model build: once per reconnect
+  // model build and AI tooling: once per reconnect
   useEffect(() => {
     if (!apiOk) return;
     getVersion().then(setVersion).catch(() => setVersion(null));
+    aiAvailable().then(setAi);
   }, [apiOk]);
 
   // conflict queue size for the sidebar badge and the dashboard
@@ -70,8 +73,8 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (apiOk) refreshArchive(); }, [apiOk, refreshArchive]);
 
   const value = useMemo(
-    () => ({ apiOk, version, conflictsPending, setConflictsPending, runs, runStats, refreshArchive }),
-    [apiOk, version, conflictsPending, runs, runStats, refreshArchive],
+    () => ({ apiOk, version, ai, conflictsPending, setConflictsPending, runs, runStats, refreshArchive }),
+    [apiOk, version, ai, conflictsPending, runs, runStats, refreshArchive],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -4,6 +4,7 @@ import { fmtInt } from "../../format";
 import { useAssistant } from "../../state/assistant";
 import { useSession } from "../../state/session";
 import { Mascot, MOOD_LABEL } from "../Mascot";
+import { TooltipLayer } from "../Tooltip";
 import { IconClose } from "../ui";
 import { Sidebar } from "./Sidebar";
 
@@ -40,6 +41,7 @@ export function AppShell() {
         <Outlet />
       </main>
       <AssistantToast />
+      <TooltipLayer />
     </div>
   );
 }

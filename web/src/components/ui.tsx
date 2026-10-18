@@ -58,6 +58,16 @@ export function ConfChip({ c }: { c: number }) {
   return <Chip status={confStatus(c)} title={c < REVIEW_THRESHOLD ? "ниже 0,70: нужна проверка" : undefined}>{fmtScore(c)}</Chip>;
 }
 
+/** Red notice with a close button (API errors, unreadable files, repeated ids). */
+export function ErrorNote({ text, onClose }: { text: string; onClose: () => void }) {
+  return (
+    <div className="error" role="alert">
+      <span>{text}</span>
+      <button type="button" className="error-close" onClick={onClose} aria-label="Скрыть"><IconClose /></button>
+    </div>
+  );
+}
+
 /** Hidden file input behind any trigger; resets so the same file can be picked twice. */
 export function FileButton({ onFile, className = "btn btn-primary", children, disabled }: {
   onFile: (f: File) => void;
@@ -72,7 +82,7 @@ export function FileButton({ onFile, className = "btn btn-primary", children, di
       <input
         ref={input}
         type="file"
-        accept=".json,.jsonl,application/json"
+        accept=".json,.jsonl,.ndjson,.csv,.tsv,.txt,application/json,text/csv,text/plain"
         hidden
         onChange={(e) => {
           const f = e.target.files?.[0];

@@ -7,9 +7,9 @@ import { computeStats, REVIEW_THRESHOLD, type Stats } from "../stats";
 import { FIELDS, JURY_KEYS, type Field, type RecordOut } from "../types";
 import { useAssistant } from "./assistant";
 import { useService } from "./service";
+import { parseInputFile, uniqueIds, type Input } from "../lib/input";
 import { deleteValue, loadValue, saveValue } from "./storage";
 
-type Input = { id: string; raw_address: string };
 
 /** The operator's working set: the parsed records, their edits and the review progress. */
 interface SessionCtx {
@@ -104,12 +104,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const t0 = performance.now();
     try {
       const out: RecordOut[] = [];
+      let repeated = 0;
       for (let i = 0; i < input.length; i += CHUNK) {
         out.push(...(await parseBatch(input.slice(i, i + CHUNK), true)));
-        setRows([...out]);
+        const u = uniqueIds(out);
+        repeated = u.repeated;
+        setRows(u.rows);
         setProgress({ done: out.length, total: input.length });
       }
       setLastRun({ ms: performance.now() - t0, count: out.length, at: Date.now() });
+      if (repeated) setError(`Повторяющиеся id: ${repeated}. В таблице у повторов суффикс ~2, ~3; в output.json id исходные.`);
       const low = out.filter((r) => r.confidence < REVIEW_THRESHOLD).length;
       if (low) react("confused", `${count(low, ADDRESSES)} из ${out.length} ниже порога 0,70.`, { label: "Открыть очередь", run: showQueue }, 9000);
       else react("happy", `${count(out.length, RECORDS)} готовы, проверка не нужна.`);
@@ -125,17 +129,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const loadFile = useCallback(async (file: File) => {
     try {
-      const text = await file.text();
-      let data: unknown = JSON.parse(text.replace(/^﻿/, ""));
-      if (data && typeof data === "object" && "records" in (data as Record<string, unknown>)) data = (data as { records: unknown }).records;
-      if (!Array.isArray(data)) throw new Error("Нужен JSON-массив { id, raw_address } или { records: [...] }");
-      await load(data.map((r: Record<string, unknown> | string, i) =>
-        typeof r === "string"
-          ? { id: String(i), raw_address: r }
-          : { id: String(r.id ?? i), raw_address: String(r.raw_address ?? "") }));
+      const input = parseInputFile(file.name, await file.text());
+      if (!input.length) throw new Error("в файле нет адресов");
+      await load(input);
     } catch (e) {
       setError(`${file.name}: ${e instanceof Error ? e.message : String(e)}`);
-      react("error", "Файл не прочитан. Нужен JSON-массив { id, raw_address }.");
+      react("error", "Файл не прочитан: нужен JSON, JSON Lines, CSV с колонкой raw_address или текст по адресу в строке.");
     }
   }, [load, react]);
 
@@ -151,7 +150,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return rec ?? null;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      react("sleeping", "API недоступен: строка не разобрана.");
+      react("sleeping", "Строка не разобрана: нет связи с сервером.");
       return null;
     }
   }, [react, refreshArchive]);
@@ -204,7 +203,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const exportJson = useCallback((ids?: string[]) => {
     const pick = ids ? new Set(ids) : null;
-    const out = (pick ? rows.filter((r) => pick.has(r.id)) : rows).map((r) => Object.fromEntries(JURY_KEYS.map((k) => [k, r[k as keyof RecordOut] ?? null])));
+    const out = (pick ? rows.filter((r) => pick.has(r.id)) : rows)
+      .map((r) => Object.fromEntries(JURY_KEYS.map((k) => [k, k === "id" ? r.orig_id ?? r.id : r[k as keyof RecordOut] ?? null])));
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

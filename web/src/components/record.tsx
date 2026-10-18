@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { scanConflicts } from "../api";
+import { scanConflicts, verifyRecords, type VerifyRow } from "../api";
 import { fmtScore } from "../format";
 import { providerLabel, savedProvider } from "../lib/ai";
 import { explain, loadCalibrator, type Explanation } from "../lib/explain";
 import { REVIEW_THRESHOLD } from "../stats";
-import { PRECISION_LABELS, type Field, type Precision, type RecordOut } from "../types";
+import { useService } from "../state/service";
+import { FIELD_LABELS, PRECISION_LABELS, type Field, type Precision, type RecordOut } from "../types";
 import { IconCompare, IconExternal, IconInfo, IconMapPin } from "./ui";
 
 /** Big score, bar with the 0.70 threshold mark. */
@@ -103,18 +104,44 @@ export function ConfidenceExplain({ r }: { r: RecordOut }) {
   );
 }
 
-/** One-record cross-check with the external labeler; a disagreement lands in the conflict queue. */
+/** Shown wherever the AI cross-check would be when this API build has no AI tooling (the offline jury image). */
+export const AI_OFF_TEXT = "Сверка с ИИ выключена на этом сервере: в офлайн-образе нет внешней модели. Она работает при запуске API из репозитория (make api-dev) с настроенным провайдером.";
+
+/**
+ * One-record cross-check with the external labeler through /verify (no side effects). A disagreement is shown
+ * field by field; it goes to the conflict queue only when the operator asks.
+ */
 export function AiCheck({ r }: { r: RecordOut }) {
-  const [state, setState] = useState<{ status: "idle" | "busy" | "agree" | "queued" | "error"; text?: string; id?: string; fields?: Field[] }>({ status: "idle" });
+  const { ai } = useService();
+  type State =
+    | { status: "idle" | "busy" | "agree" }
+    | { status: "diff"; row: VerifyRow }
+    | { status: "queued"; id: string }
+    | { status: "error"; text: string };
+  const [state, setState] = useState<State>({ status: "idle" });
   useEffect(() => { setState({ status: "idle" }); }, [r.id]);
   const { provider, model } = savedProvider();
+  const input = [{ id: r.orig_id ?? r.id, raw_address: r.raw_address }];
 
   const run = async () => {
     setState({ status: "busy" });
     try {
-      const res = await scanConflicts([{ id: r.id, raw_address: r.raw_address }], provider, model);
-      if (res.needs_review && res.conflict_ids[0]) setState({ status: "queued", id: res.conflict_ids[0] });
+      const res = await verifyRecords(input, provider, model);
+      const row = res.records[0];
+      const llmError = row?.issues?.find((i) => i.startsWith("llm_error"));
+      if (!row) setState({ status: "error", text: "ИИ не вернул ответ" });
+      else if (llmError) setState({ status: "error", text: `ИИ не ответил: ${llmError.replace(/^llm_error:?\s*/, "")}` });
+      else if (row.disagreements.length) setState({ status: "diff", row });
       else setState({ status: "agree" });
+    } catch (e) {
+      setState({ status: "error", text: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  const queue = async () => {
+    try {
+      const res = await scanConflicts(input, provider, model);
+      setState(res.conflict_ids[0] ? { status: "queued", id: res.conflict_ids[0] } : { status: "agree" });
     } catch (e) {
       setState({ status: "error", text: e instanceof Error ? e.message : String(e) });
     }
@@ -126,18 +153,35 @@ export function AiCheck({ r }: { r: RecordOut }) {
         <span className="scan-icon"><IconCompare /></span>
         <div className="ai-check-text">
           <p className="ai-check-title">Сверка с внешним ИИ</p>
-          <p className="insp-note">{providerLabel(provider)}{model ? ` · ${model}` : ""}</p>
+          <p className="insp-note">{ai === false ? "недоступна на этом сервере" : `${providerLabel(provider)}${model ? ` · ${model}` : ""}`}</p>
         </div>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={run} disabled={state.status === "busy"}>
-          {state.status === "busy" ? "Сверяю…" : "Сверить"}
-        </button>
+        {ai !== false && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={run} disabled={state.status === "busy" || ai === null}>
+            {state.status === "busy" ? "Сверяю…" : "Сверить"}
+          </button>
+        )}
       </div>
+      {ai === false && <p className="insp-note">{AI_OFF_TEXT}</p>}
       {state.status === "agree" && <p className="ai-check-result is-ok">ИИ разметил строку так же.</p>}
-      {state.status === "queued" && state.id && (
-        <p className="ai-check-result is-flag">Есть расхождение, запись в очереди конфликтов. <Link className="link" to={`/conflicts/${encodeURIComponent(state.id)}`}>Открыть</Link></p>
+      {state.status === "diff" && (
+        <div className="ai-check-result is-flag">
+          <ul className="ai-diff">
+            {state.row.disagreements.map((f) => (
+              <li key={f}>
+                <b>{FIELD_LABELS[f as Field] ?? f}</b>
+                <span>{state.row.ours[f as Field] ?? "пусто"}</span>
+                <span className="ai-diff-arrow">→</span>
+                <span>{state.row.llm[f as Field] ?? "пусто"}</span>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={queue}>В очередь конфликтов</button>
+        </div>
+      )}
+      {state.status === "queued" && (
+        <p className="ai-check-result is-flag">Запись в очереди конфликтов. <Link className="link" to={`/conflicts/${encodeURIComponent(state.id)}`}>Открыть</Link></p>
       )}
       {state.status === "error" && <p className="ai-check-result is-flag">{state.text}</p>}
     </div>
   );
 }
-

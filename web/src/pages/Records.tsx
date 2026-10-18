@@ -6,7 +6,7 @@ import { Mascot } from "../components/Mascot";
 import { AiCheck, ConfidenceCard, ConfidenceExplain, GeoCard } from "../components/record";
 import { DEFAULT_PAGE_SIZE, FilterChip, PAGE_SIZES, Pagination, SearchField, Segmented, SortHeader, TableCard, type SortDir } from "../components/table";
 import {
-  Chip, ConfChip, FileButton, Highlighted, IconChevronRight, IconClose, IconDownload, IconFilter, IconText, IconUndo, IconUpload, useDropTarget,
+  Chip, ConfChip, ErrorNote, FileButton, Highlighted, IconChevronRight, IconClose, IconDownload, IconFilter, IconText, IconUndo, IconUpload, useDropTarget,
   type ChipStatus,
 } from "../components/ui";
 import { ADDRESSES, count, fmtInt, fmtScore, RECORDS } from "../format";
@@ -254,7 +254,7 @@ export function Records() {
       </PageHeader>
 
       <div className={`content ${selected ? "has-drawer" : ""}`}>
-        {s.error && <div className="error" role="alert">{s.error}</div>}
+        {s.error && <ErrorNote text={s.error} onClose={() => s.setError(null)} />}
 
         {!s.ready ? <TableSkeleton /> : !rows.length ? <EmptyRecords /> : (
           <TableCard

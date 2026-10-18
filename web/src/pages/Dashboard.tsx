@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Mascot, type Pose } from "../components/Mascot";
 import {
-  Bar, Chip, ConfChip, FileButton, IconArrowRight, IconDownload, IconSearch, IconText, IconUpload, StatCard, useDropTarget,
+  Bar, Chip, ConfChip, ErrorNote, FileButton, IconArrowRight, IconDownload, IconSearch, IconText, IconUpload, StatCard, useDropTarget,
 } from "../components/ui";
 import { ADDRESSES, BATCHES, count, fmtInt, fmtMs, fmtPct, fmtScore, fmtSource, fmtWhen, RECORDS } from "../format";
 import { PATHS } from "../routes";
@@ -35,7 +35,7 @@ export function Dashboard() {
 
       <div className="content">
         <NextStep />
-        {session.error && <div className="error" role="alert">{session.error}</div>}
+        {session.error && <ErrorNote text={session.error} onClose={() => session.setError(null)} />}
 
         {hasRows ? (
           <section className="grid-4" aria-label="Текущая сессия">

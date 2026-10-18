@@ -5,7 +5,8 @@ import { Drawer } from "../components/Drawer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Mascot } from "../components/Mascot";
 import { DEFAULT_PAGE_SIZE, FilterChip, PAGE_SIZES, Pagination, SearchField, Segmented, TableCard } from "../components/table";
-import { Chip, ConfChip, IconCheck, IconChevronRight, IconCompare, IconText, type ChipStatus } from "../components/ui";
+import { AI_OFF_TEXT } from "../components/record";
+import { Chip, ConfChip, ErrorNote, IconCheck, IconChevronRight, IconCompare, IconText, type ChipStatus } from "../components/ui";
 import { ADDRESSES, count, fmtInt, fmtScore, fmtWhen } from "../format";
 import { PROVIDERS, saveProvider, savedProvider } from "../lib/ai";
 import { useAssistant } from "../state/assistant";
@@ -144,7 +145,7 @@ export function Conflicts() {
       <div className={`content ${selected ? "has-drawer" : ""}`}>
         <ScanPanel onScanned={(c) => { applyCounts(c); if (status !== "pending") setParam({ status: null }); else load("pending"); }} rowsCount={rows.length} />
 
-        {error && <div className="error" role="alert">{error}</div>}
+        {error && <ErrorNote text={error} onClose={() => setError(null)} />}
 
         <TableCard
           toolbar={
@@ -247,6 +248,7 @@ export function Conflicts() {
 function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) => void; rowsCount: number }) {
   const { react } = useAssistant();
   const { rows } = useSession();
+  const { ai } = useService();
   const [provider, setProvider] = useState(() => savedProvider().provider);
   const [model, setModel] = useState(() => savedProvider().model);
   const [pasting, setPasting] = useState(false);
@@ -299,10 +301,10 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
           <span className="scan-icon"><IconCompare /></span>
           <div>
             <h3>Сверка с внешним ИИ</h3>
-            <p className="muted">В очередь попадает запись с расхождением полей, уверенностью ниже 0,70 или значением, которого нет в строке.</p>
+            <p className="muted">{ai === false ? AI_OFF_TEXT : "В очередь попадает запись с расхождением полей, уверенностью ниже 0,70 или значением, которого нет в строке."}</p>
           </div>
         </div>
-        <div className="scan-controls">
+        {ai !== false && <div className="scan-controls">
           <select className="field select-pill" value={provider} onChange={(e) => choose(e.target.value)} aria-label="Внешний ИИ">
             {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
@@ -320,9 +322,9 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
               : queue.length ? `Сверить очередь · ${fmtInt(queue.length)}`
               : `Сверить ${count(rowsCount, ADDRESSES)}`}
           </button>
-        </div>
+        </div>}
       </div>
-      {pasting && (
+      {pasting && ai !== false && (
         <form className="scan-paste" onSubmit={(e) => { e.preventDefault(); scan(lines.map((l, i) => ({ id: `conflict_${Date.now()}_${i + 1}`, raw_address: l }))); }}>
           <textarea className="field" rows={3} value={paste} onChange={(e) => setPaste(e.target.value)} aria-label="Адреса, по одному в строке" spellCheck={false} />
           <button type="submit" className="btn btn-ghost" disabled={!!scanning || !lines.length}>Сверить {count(lines.length, ADDRESSES)}</button>
