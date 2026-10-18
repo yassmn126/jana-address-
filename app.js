@@ -584,6 +584,17 @@ const I18N = {
     hero_b2: '11 полей схемы',
     hero_b3: 'Работает офлайн',
     metrics_aria: 'Ключевые показатели',
+    nav_aria: 'Разделы',
+    nav_dashboard: 'Обзор',
+    nav_batch: 'Пакетная обработка',
+    nav_quick: 'Быстрый тест',
+    nav_badge_title: 'В очереди на проверку: {n}',
+    batch_title1: 'Пакетная обработка.',
+    batch_title2: 'Файл целиком — ответ на каждую запись.',
+    quick_title1: 'Быстрый тест.',
+    quick_title2: 'Одна строка — и сразу все поля.',
+    cta_upload: 'Загрузить файл',
+    cta_quick: 'Проверить один адрес',
     m_total: 'Всего',
     m_ready: 'Валидно',
     m_review: 'На проверку',
@@ -620,7 +631,7 @@ const I18N = {
     dz_aria: 'Загрузить JSON-файл с адресами',
     dz_drop: 'Перетащите <span class="font-mono text-lime-300">sample_input.json</span> сюда',
     dz_browse: 'или <span class="text-neutral-300 underline decoration-lime-400/50 underline-offset-4">выберите файл</span> · JSON-массив <span class="font-mono text-neutral-400">{ id, raw_address }</span>',
-    ingest_idle: 'Файл ещё не загружен. Ответ будет на каждую запись — ничего не пропускается.',
+    ingest_hint: 'Ответ будет на каждую запись — ничего не пропускается. Подходит JSON-массив или JSON Lines.',
     parsing_n: 'Разбираем {n}…',
     loading_parsed: 'Загружаем размеченные записи…',
     quick_eyebrow: 'Быстрый тест',
@@ -758,6 +769,17 @@ const I18N = {
     hero_b2: 'Схеманың 11 өрісі',
     hero_b3: 'Офлайн жұмыс',
     metrics_aria: 'Негізгі көрсеткіштер',
+    nav_aria: 'Бөлімдер',
+    nav_dashboard: 'Шолу',
+    nav_batch: 'Топтамалап өңдеу',
+    nav_quick: 'Жылдам тест',
+    nav_badge_title: 'Тексеру кезегінде: {n}',
+    batch_title1: 'Топтамалап өңдеу.',
+    batch_title2: 'Бүкіл файл — әр жазбаға жауап.',
+    quick_title1: 'Жылдам тест.',
+    quick_title2: 'Бір жол — бірден барлық өрістер.',
+    cta_upload: 'Файл жүктеу',
+    cta_quick: 'Бір мекенжайды тексеру',
     m_total: 'Барлығы',
     m_ready: 'Жарамды',
     m_review: 'Тексеру қажет',
@@ -794,7 +816,7 @@ const I18N = {
     dz_aria: 'Мекенжайлары бар JSON файлын жүктеу',
     dz_drop: '<span class="font-mono text-lime-300">sample_input.json</span> файлын осында сүйреңіз',
     dz_browse: 'немесе <span class="text-neutral-300 underline decoration-lime-400/50 underline-offset-4">файлды таңдаңыз</span> · <span class="font-mono text-neutral-400">{ id, raw_address }</span> JSON массиві',
-    ingest_idle: 'Файл әлі жүктелмеген. Әр жазбаға жауап беріледі — ештеңе өткізіліп кетпейді.',
+    ingest_hint: 'Әр жазбаға жауап беріледі — ештеңе өткізілмейді. JSON массиві немесе JSON Lines қолайлы.',
     parsing_n: '{n} талдануда…',
     loading_parsed: 'Талданған жазбалар жүктелуде…',
     quick_eyebrow: 'Жылдам тест',
@@ -932,6 +954,17 @@ const I18N = {
     hero_b2: '11 schema fields',
     hero_b3: 'Offline fallback',
     metrics_aria: 'Key metrics',
+    nav_aria: 'Sections',
+    nav_dashboard: 'Dashboard',
+    nav_batch: 'Batch processing',
+    nav_quick: 'Quick test',
+    nav_badge_title: '{n} waiting for review',
+    batch_title1: 'Batch processing.',
+    batch_title2: 'A whole file, an answer for every record.',
+    quick_title1: 'Quick test.',
+    quick_title2: 'One line in, every field out.',
+    cta_upload: 'Upload a file',
+    cta_quick: 'Try one address',
     m_total: 'Total',
     m_ready: 'Validated',
     m_review: 'Needs review',
@@ -968,7 +1001,7 @@ const I18N = {
     dz_aria: 'Upload a JSON file with addresses',
     dz_drop: 'Drop <span class="font-mono text-lime-300">sample_input.json</span> here',
     dz_browse: 'or <span class="text-neutral-300 underline decoration-lime-400/50 underline-offset-4">browse files</span> · JSON array of <span class="font-mono text-neutral-400">{ id, raw_address }</span>',
-    ingest_idle: 'No file loaded yet. Each record gets an answer: nothing is skipped.',
+    ingest_hint: 'Every record gets an answer: nothing is skipped. A JSON array or JSON Lines both work.',
     parsing_n: 'Parsing {n}…',
     loading_parsed: 'Loading parsed records…',
     quick_eyebrow: 'Quick test',
@@ -1227,11 +1260,11 @@ function mascotSvg(mood = 'idle') {
   return `<svg class="mascot" data-mood="${mood}" viewBox="0 0 200 212" role="img" aria-label="${esc(t('mascot_aria', { state: t(`mm_${mood}`) }))}">
     <defs>
       <radialGradient id="${id}b" cx="36%" cy="24%" r="85%">
-        <stop offset="0" stop-color="#f7fee7"/><stop offset=".22" stop-color="#d9f99d"/>
-        <stop offset=".5" stop-color="#a3e635"/><stop offset=".86" stop-color="#65a30d"/><stop offset="1" stop-color="#4d7c0f"/>
+        <stop offset="0" stop-color="#f6fbe0"/><stop offset=".22" stop-color="#dcf184"/>
+        <stop offset=".5" stop-color="#bce33c"/><stop offset=".86" stop-color="#86ad1c"/><stop offset="1" stop-color="#5f8314"/>
       </radialGradient>
       <radialGradient id="${id}s" cx="50%" cy="100%" r="58%">
-        <stop offset="0" stop-color="#365314" stop-opacity=".6"/><stop offset="1" stop-color="#365314" stop-opacity="0"/>
+        <stop offset="0" stop-color="#3f5a0e" stop-opacity=".6"/><stop offset="1" stop-color="#3f5a0e" stop-opacity="0"/>
       </radialGradient>
     </defs>
     <ellipse class="m-ground" cx="100" cy="202" rx="52" ry="7"/>
@@ -1276,19 +1309,31 @@ function setMood(svg, mood) {
   svg.setAttribute('aria-label', t('mascot_aria', { state: t(`mm_${mood}`) }));
 }
 
-// The hero mascot holds a background "base" state (engine / queue) and plays short reactions on events.
+// The mascot holds a background "base" state (engine / queue) and plays short reactions on events.
+// Every [data-mascot-view] (hero bubble on the dashboard, compact assistant in each page header) mirrors it.
 // Messages are stored as functions so a language switch re-renders them.
 const Mascot = {
-  svg: null,
+  views: [],
   base: null,
   current: null,
   timer: null,
 
   mount() {
-    $('#heroMascot').innerHTML = mascotSvg('idle');
-    this.svg = $('#heroMascot svg');
-    this.svg.style.filter = 'drop-shadow(0 22px 40px rgba(163,230,53,.28))';
-    $('#bubbleAction').addEventListener('click', () => this.current && this.current.action && this.current.action.run());
+    this.views = $$('[data-mascot-view]').map((root) => {
+      const slot = root.querySelector('[data-mascot-svg]');
+      slot.innerHTML = mascotSvg('idle');
+      const view = {
+        root,
+        svg: slot.querySelector('svg'),
+        eyebrow: root.querySelector('[data-mascot-eyebrow]'),
+        text: root.querySelector('[data-mascot-text]'),
+        action: root.querySelector('[data-mascot-action]'),
+        pop: root.querySelector('.bubble') || root,
+      };
+      if (root.dataset.mascotView === 'hero') view.svg.style.filter = 'drop-shadow(0 24px 36px rgba(14,14,13,.55))';
+      view.action.addEventListener('click', () => this.current && this.current.action && this.current.action.run());
+      return view;
+    });
   },
 
   setBase(mood, text, opts = {}) {
@@ -1302,21 +1347,21 @@ const Mascot = {
     this.show({ mood, text, ...opts });
   },
 
-  show(s) {
-    if (!s || !this.svg) return;
-    const changed = !this.current || this.current.mood !== s.mood || this.current.text !== s.text;
-    this.current = s;
-    setMood(this.svg, s.mood);
-    const bubble = $('#mascotBubble');
-    bubble.dataset.mood = s.mood;
-    const eyebrow = $('#bubbleEyebrow');
-    eyebrow.className = `eyebrow ${s.mood === 'happy' ? '' : s.mood === 'confused' ? 'is-warn' : 'is-muted'}`;
-    eyebrow.textContent = t(`mm_${s.mood}`);
-    $('#bubbleText').textContent = typeof s.text === 'function' ? s.text() : s.text;
-    const act = $('#bubbleAction');
-    act.classList.toggle('hidden', !s.action);
-    if (s.action) act.textContent = s.action.label();
-    if (changed) { bubble.classList.remove('is-pop'); void bubble.offsetWidth; bubble.classList.add('is-pop'); }
+  show(st) {
+    if (!st || !this.views.length) return;
+    const changed = !this.current || this.current.mood !== st.mood || this.current.text !== st.text;
+    this.current = st;
+    const message = typeof st.text === 'function' ? st.text() : st.text;
+    for (const v of this.views) {
+      setMood(v.svg, st.mood);
+      v.root.dataset.mood = st.mood;
+      v.eyebrow.className = `eyebrow ${st.mood === 'happy' ? '' : st.mood === 'confused' ? 'is-warn' : 'is-muted'}`;
+      v.eyebrow.textContent = t(`mm_${st.mood}`);
+      v.text.textContent = message;
+      v.action.classList.toggle('hidden', !st.action);
+      if (st.action) v.action.textContent = st.action.label();
+      if (changed) { v.pop.classList.remove('is-pop'); void v.pop.offsetWidth; v.pop.classList.add('is-pop'); }
+    }
   },
 
   refresh() { if (this.current) this.show(this.current); },
@@ -1515,6 +1560,9 @@ function renderKpis() {
   // The one hero figure: share of addresses that can ship without a human.
   $('#heroReady').textContent = total ? pct(ready, total) : '—';
   $('#heroReady').classList.toggle('is-empty', !total);
+  $('#heroCtas').classList.toggle('hidden', Boolean(total));
+  $('#heroChips').classList.toggle('hidden', !total);
+  $('#heroChips').classList.toggle('flex', Boolean(total));
   $('#heroCaption').textContent = t(total ? 'hero_cap' : 'hero_cap_empty');
 
   animateNumber($('#kpiTotal'), total);
@@ -1753,6 +1801,7 @@ function renderAll() {
   renderTabs();
   renderTable();
   renderIngestMeta();
+  renderNavBadge();
   $('#exportBtn').disabled = !state.records.length;
   syncMascotBase();
 }
@@ -1861,7 +1910,7 @@ function renderIngestMeta() {
   const box = $('#ingestMeta');
   const run = state.lastRun;
   if (!state.records.length || !run) {
-    box.innerHTML = `<span class="flex items-start gap-2"><span class="dot is-slate mt-[7px]"></span><span>${esc(t('ingest_idle'))}</span></span>`;
+    box.innerHTML = '';
     return;
   }
   box.innerHTML = `
@@ -1996,6 +2045,38 @@ function bindQuickTest() {
 }
 
 /* =============================================================================
+ * Pages (navbar) — hash routing: #dashboard · #batch · #quick
+ * ========================================================================== */
+const PAGES = ['dashboard', 'batch', 'quick'];
+const currentPage = () => {
+  const h = typeof location !== 'undefined' ? location.hash.replace('#', '') : '';
+  return PAGES.includes(h) ? h : 'dashboard';
+};
+
+function showPage(page, { scroll = true } = {}) {
+  for (const p of PAGES) $(`#page-${p}`).hidden = p !== page;
+  $$('[data-page-link]').forEach((a) => {
+    const on = a.dataset.pageLink === page;
+    a.classList.toggle('is-active', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  if (scroll) window.scrollTo({ top: 0 });
+}
+
+function goto(page) {
+  if (location.hash === `#${page}`) showPage(page);
+  else location.hash = page; // the hashchange listener renders the page
+}
+
+function renderNavBadge() {
+  const { review } = counts();
+  const badge = $('#navReviewBadge');
+  badge.classList.toggle('hidden', !review);
+  badge.textContent = fmtInt(review);
+  badge.title = t('nav_badge_title', { n: fmtInt(review) });
+}
+
+/* =============================================================================
  * Table interactions
  * ========================================================================== */
 function showReviewQueue() {
@@ -2003,11 +2084,12 @@ function showReviewQueue() {
   state.page = 1;
   renderTabs();
   renderTable();
-  $('#tabs').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  goto('batch');
+  requestAnimationFrame(() => $('#tabs').scrollIntoView({ behavior: 'smooth', block: 'center' }));
 }
 
 function bindTable() {
-  $('#emptyState').addEventListener('click', (e) => { if (e.target.closest('[data-action="demo"]')) loadDemo(); });
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-action="demo"]')) loadDemo(); });
   const tbody = $('#tbody');
   tbody.addEventListener('click', (e) => {
     const row = e.target.closest('tr[data-uid]');
@@ -2227,6 +2309,8 @@ function init() {
   });
 
   applyStaticI18n();
+  window.addEventListener('hashchange', () => showPage(currentPage()));
+  showPage(currentPage(), { scroll: false });
   const restored = restoreSession();
   setEngine('checking');
   renderAll();
