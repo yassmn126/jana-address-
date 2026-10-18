@@ -11,7 +11,7 @@ Original strings: jury score **100.00**
 | double_space | 100.00 | +0.00 | 100.0 % | 0 |
 | tab_newline | 100.00 | +0.00 | 100.0 % | 0 |
 | no_space_after_comma | 100.00 | +0.00 | 100.0 % | 0 |
-| commas_to_spaces | 99.08 | -0.92 | 98.3 % | 7 |
+| commas_to_spaces | 99.04 | -0.96 | 98.3 % | 7 |
 | bom_prefix | 100.00 | +0.00 | 100.0 % | 0 |
 | country_prefix | 100.00 | +0.00 | 100.0 % | 0 |
 | postcode_prefix | 100.00 | +0.00 | 100.0 % | 0 |
@@ -39,7 +39,7 @@ Original strings: jury score **100.00**
 | province_in_string | 55 | 100.00 | 100.0 % |
 | no_city | 27 | 100.00 | 100.0 % |
 | no_street_type | 85 | 100.00 | 100.0 % |
-| 3plus_details | 46 | 100.00 | 100.0 % |
+| 3plus_details | 47 | 100.00 | 100.0 % |
 | noise_words | 12 | 100.00 | 100.0 % |
 
 ## Inconsistent examples (original → transformed)

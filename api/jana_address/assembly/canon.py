@@ -57,7 +57,8 @@ def _trim_unbalanced(v: str | None) -> str | None:
     return v or None
 
 
-_LIVING_PREFIX = re.compile(r"^(?:ЖК|Ж/К|СТ|СНТ|СДТ|ZhK|ZHK|JK)\.?\s+(?=\S)")
+_LIVING_PREFIX = re.compile(r"^(?:ЖК|Ж/К|СТ|СНТ|СДТ|СОТ|С/Т|ZhK|ZHK|JK|садоводство|дачи|дачный массив|dacha massiv|садовое товарищество)\.?\s+(?=\S)", re.I)
+_LIVING_SUFFIX = re.compile(r"\s+(?:саяжайы|саяжай|бау-бақша серіктестігі|тұрғын үй кешені)$", re.I)
 
 
 def _strip_settlement_words(city: str) -> str:
@@ -97,7 +98,7 @@ def assemble(rp: RuleParse) -> tuple[dict, dict]:
                    ("landmark", "LANDMARK")):
         v = _trim_unbalanced(_val(rp, key))
         if f == "living_area" and v and not conv.get("living_area_keep_type_word"):
-            v = _LIVING_PREFIX.sub("", v).strip() or v     # «СТ Строитель» / «ZhK Highvill» → the name (Q6, Q15)
+            v = _LIVING_SUFFIX.sub("", _LIVING_PREFIX.sub("", v)).strip() or v     # «СТ Строитель», «Металлург саяжайы» → the name (Q6, Q15)
         if v:
             fields[f] = v
             prov[f] = "string"
@@ -119,7 +120,7 @@ def assemble(rp: RuleParse) -> tuple[dict, dict]:
 
     house = _val(rp, "HOUSE")
     if house:
-        fields["house"] = house.replace(" ", "")
+        fields["house"] = re.sub(r"^(\d+)-([^\W\d_])$", r"\1\2", house.replace(" ", ""))   # «21-а» → «21а»
         prov["house"] = "string"
         join = conv.get("house_building_join")
         if join is not None and rp.meta.get("house_building"):

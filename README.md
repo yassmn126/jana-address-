@@ -57,7 +57,7 @@ they are never consulted at inference (the brief forbids answer lookup by exact 
 
 ## Develop
 ```bash
-make test        # 227 tests: golden conventions, API, ML contract, stress rules, independent benchmark, robustness, fuzz, geocoding, AI cross-check
+make test        # 290 tests: golden conventions, API, ML contract, stress rules, independent + adversarial benchmarks, robustness, fuzz, geocoding, AI cross-check
 make api-dev     # uvicorn --reload on :8000      (pip install -r api/requirements-dev.txt)
 make web-dev     # vite dev server on :5173, proxies /api
 make eval        # jury-metric replica on a gold file (eval/metric.py)
@@ -98,7 +98,7 @@ docs/               CONVENTIONS.md · HANDOFF.md · ML.md · ARCHITECTURE.md
 | Labeling pipeline (LLM / local vLLM / rules) with validators | ✅ (needs train.json) |
 | Dataset builder, synthetic generator, training/export/calibration scripts | ✅ scripts + round-trip tests (no model trained yet) |
 | ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses (v6: + Latin-aware synthetic), ONNX 10.5 MB, 0.7 ms/record; jury metric 100.00 on every hand-labeled set | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
-| **Independent benchmark**: 526 addresses written and labeled by Claude Opus 5.5 in 22 themes, not by us | ✅ 97.08 on first contact → **99.47** after the fixes it found; on a second, untouched set: main 96.30 → **99.33** — [docs/BENCHMARK.md](docs/BENCHMARK.md), `make benchmark` |
+| **Independent benchmarks**: 5 sets written and labeled by Claude Opus 5.5 (22 regional + 16 adversarial themes), not by us | ✅ regional: 97.08 → **99.47**; untouched regional: main 96.30 → **99.33**; **adversarial, untouched, measured once: main 83.51 → 96.47** — [docs/BENCHMARK.md](docs/BENCHMARK.md), `make benchmark` |
 | Gazetteer: OSM Kazakhstan → sqlite (settlements ru/kk, provinces, city districts, 5.3k микрорайоны/ЖК, 50k streets, house-level districts), seed fallback | ✅ `make gazetteer` |
 | Calibrated confidence (logistic + isotonic, JSON, numpy-only at runtime) | ✅ on synthetic + handmade gold — refit on the real dev set |
 | Geocoding (house → street → микрорайон → district → city point, `?explain=1` / `POST /api/v1/geocode`) + suggest (`GET /api/v1/suggest`) | ✅ 97.4 % of real OSM addresses typed messily resolve to the exact building |

@@ -14,16 +14,19 @@ Every decision is recorded in rp.flags as `arb_<field>_<decision>` for the confi
 """
 from __future__ import annotations
 
+import dataclasses
 import re
 
 from ..ml.onnx_tagger import ModelSpan
-from ..preprocess import extract, match_view
-from ..rules.grammar import RuleParse, RuleParser, Span
+from ..preprocess import extract, match_view, norm_token
+from ..rules.grammar import TRIM_NOISE, RuleParse, RuleParser, Span
 
 FIELDS = ["PROVINCE", "CITY", "DISTRICT", "LIVING_AREA", "STREET_TYPE", "STREET_NAME",
           "HOUSE", "APARTMENT", "ENTRANCE", "FLOOR", "LANDMARK"]
 KEYWORD_RULES = {"kw_glued", "kw_prev", "kw_next"}
-GAZETTEER_RULES = {"type_case_B_gazetteer"}    # «Аксай 4 мкр»: the gazetteer knows the whole name — the model cannot override
+# the model cannot override these: «Аксай 4 мкр» (the gazetteer knows the whole name), a correction («нет, 12»), a house range
+ABSOLUTE_RULES = {"type_case_B_gazetteer", "corrected", "house_range"}
+DETAIL_KW_ROLES = {"house_kw", "apartment_kw", "entrance_kw", "floor_kw", "building_kw"}
 # positional guesses of the grammar (no keyword evidence): the model may override them more easily
 WEAK_RULES = {"fallback_word_number", "house_fallback", "city_seed", "after_street", "micro_as_living", "gazetteer_chunk",
               "fallback_word_sep_number", "after_street_sep", "leftover_chunk", "fallback_micro_number", "dash_after_house",
@@ -31,7 +34,8 @@ WEAK_RULES = {"fallback_word_number", "house_fallback", "city_seed", "after_stre
 # spans whose boundaries come from an explicit keyword («район Есиль», «г. Алматы», «ЖК Томирис», «Актюбинская обл»):
 # they win overlaps against model spans
 ANCHORED_RULES = KEYWORD_RULES | {"district_kw", "city_kw", "city_kk_suffix", "living_kw", "province_table", "type_kw",
-                                  "district_bare"}
+                                  "district_bare", "micro_living_prefix", "corrected", "house_range",
+                                  "type_case_A", "type_case_B", "type_case_C"}   # «мкр Жулдыз-1» is the street, not a ж/м
 COUNTRY = {"казахстан", "kazakhstan", "рк", "kz", "республика казахстан", "қазақстан", "казакстан"}
 HOUSE_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?(/\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?)?$")
 NUM_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?$")
@@ -71,8 +75,11 @@ def _ok(rp: RuleParse, field: str, start: int, end: int) -> bool:
     text = extract(rp.raw, start, end)
     if not text or not re.search(r"[^\W_]", text):        # «???», «-», «,» are never a value
         return False
-    if any(t.role == "phone" for t in rp.tokens if t.start >= start and t.end <= end):
-        return False                                       # phone numbers are never a value
+    inside = [t for t in rp.tokens if t.start >= start and t.end <= end]
+    if any(t.role in ("phone", "paren", "postcode", "pobox") or t.meta.get("sep") for t in inside):
+        return False                                       # phones, «(бывш. Ленина)», postcodes, «а/я 15», separators: never a value
+    if field in NAME_FIELDS and any(t.kind == "PUNCT" and t.text == "—" and t.meta.get("sep") for t in inside):
+        return False                                       # «Павлодар — Кутузова — …»: repeated em dashes separate fields
     if field in ("STREET_NAME", "CITY", "DISTRICT", "LIVING_AREA") and match_view(text) in COUNTRY \
             and not rp.raw[:start].strip(" ,.;\ufeff"):
         return False                                       # «Казахстан, дом 10» — the country, not «ул. Казахстан»
@@ -121,8 +128,15 @@ def _swallows_keyword(rp: RuleParse, field: str, start: int, end: int, rule_span
         if t.kind != "WORD" or t.role not in KW_ROLES \
                 or (rule_span is not None and t.start >= rule_span.start and t.end <= rule_span.end):
             continue
-        if len(t.text) == 1 or (known_word is not None and known_word(t.text)):
-            continue                                  # an initial «К. Либкнехта»; or a word the tagger was trained on
+        if len(t.text) == 1:
+            continue                                  # an initial: «К. Либкнехта», «Ш. Уалиханова»
+        if t is toks[-1] and t is not toks[0] and len(t.text) >= 4 and t.text.isascii() and t.text[0].isupper() \
+                and t.text[1:].islower():
+            continue                                  # a Latin brand tail: «Smart House», «Expo Avenue», «Dostyk Residence»
+        if t.label == "STREET_TYPE" or t.role in DETAIL_KW_ROLES:
+            return True                               # «5 линия» (the grammar read «линия» as the type), «… частный дом»
+        if known_word is not None and known_word(t.text):
+            continue                                  # a word the tagger was trained on («Набережная»)
         if t is toks[-1] and t is not toks[0] and (t.role in ("living_kw", "city_kw")
                                                    or (rule_span is None and t.role == "street_type")):
             continue                                  # «Highvill Residence», «Жана Кала»; model-only «3 линия»
@@ -136,6 +150,20 @@ def _model_says_o(rp: RuleParse, span: Span, labels: list[str], probs: list[floa
     if not idx or tau > 1.0:
         return False
     return all(labels[i] == "O" and (probs is None or probs[i] >= tau) for i in idx)
+
+
+def _trim_noise(rp: RuleParse, field: str, start: int, end: int) -> tuple[int, int]:
+    """A model name span never starts or ends with a noise word («Нурсат частный» → «Нурсат»), unless it is all noise."""
+    if field not in NAME_FIELDS:
+        return start, end
+    toks = [t for t in rp.tokens if t.start >= start and t.end <= end and t.kind != "PUNCT"]
+    if len(toks) < 2:
+        return start, end
+    while len(toks) > 1 and norm_token(toks[0].text) in TRIM_NOISE:
+        toks.pop(0)
+    while len(toks) > 1 and norm_token(toks[-1].text) in TRIM_NOISE:
+        toks.pop()
+    return toks[0].start, toks[-1].end
 
 
 def _free_of(final: dict, span: Span, field: str) -> bool:
@@ -152,6 +180,9 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
     best_model: dict[str, ModelSpan] = {}
     for ms in model_spans:
         if ms.field in FIELDS and (ms.field not in best_model or ms.prob > best_model[ms.field].prob):
+            s0, e0 = _trim_noise(rp, ms.field, ms.start, ms.end)
+            if (s0, e0) != (ms.start, ms.end):
+                ms = dataclasses.replace(ms, start=s0, end=e0)
             best_model[ms.field] = ms
     rp.meta["model_probs"] = {f: round(m.prob, 3) for f, m in best_model.items()}
 
@@ -181,12 +212,17 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
             else:
                 rp.flags.append(f"arb_{f.lower()}_model_rejected")
         elif r and m:
-            if r.rule in GAZETTEER_RULES:
+            if r.rule in ABSOLUTE_RULES:
                 final[f] = r
                 rp.flags.append(f"arb_{f.lower()}_rule_wins")
                 continue
             if f == "PROVINCE" and r.rule == "province_table" and r.start <= m.start and m.end <= r.end:
                 final[f] = r                          # «Almaty obl»: the table match is longer than the model's «Almaty»
+                rp.flags.append(f"arb_{f.lower()}_rule_wins")
+                continue
+            if r.rule == "living_kw" and (m.end <= r.start or m.start >= r.end):
+                final[f] = r                          # «ЖК Хайвил» (explicit keyword) vs the model's «левый берег» elsewhere
+                # (only ЖК: city/district keyword spans are error-prone — «А.Б.» as «аул Б» — and the model corrects them)
                 rp.flags.append(f"arb_{f.lower()}_rule_wins")
                 continue
             keyword_bound = r.rule in KEYWORD_RULES
@@ -213,7 +249,7 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
             return True                                # «Almaty obl» (table) beats the model's city «Almaty» inside it
         return rule in ANCHORED_RULES and (sp.start, sp.end) in model_offsets
 
-    accepted = sorted(final.values(), key=lambda s: (not anchored(s), -s.score))
+    accepted = sorted(final.values(), key=lambda s: (s.rule not in ABSOLUTE_RULES, not anchored(s), -s.score))
     kept: list[Span] = []
     for s in accepted:
         if any(not (s.end <= k.start or s.start >= k.end) for k in kept):

@@ -91,8 +91,50 @@ measured **once**, after all the fixes and the v6 model, with nothing changed af
 | main `f825f06` | 94.43 | 95.86 | **96.30** |
 | this branch (v6) | 97.19 | 98.83 | **99.33** |
 
-**+3.0 points on addresses no one tuned on** — the improvement generalizes. What is still wrong there (7 field errors in
-6 records): misspelled keywords the lexicon does not have yet («микрараён», «көшсі»), a house glued to a street name
-followed by a fraction («Бухар-Жырау55/3кв.12»), a Latin «r-n», a Latin «korpus» after a postfix street type, and
-«Карагнда» (typo) blocking the «Пришахтинск 21 мкр» split. These stay unfixed here on purpose; the next round of fixes
-turns this set into development data, and a third set would be needed for the next honest number.
+**+3.0 points on addresses no one tuned on** — the improvement generalizes.
+
+## Rounds 3–5: fix, then measure a fresh set, then fix again
+
+Every round turns the previous untouched set into development data and generates a new one. Each "untouched" number
+below was measured **once**, before any fix that followed it.
+
+| set | what | main `f825f06` | PR #3 head | after fixing on it |
+|---|---|---|---|---|
+| #2 `claude_heldout` (263) | regional, untouched at round 2 | 96.30 | 99.33 | 100.00 |
+| #3 `claude_heldout3` (263) | regional, untouched at round 3 | 93.91 | 98.36 | 99.78 |
+| #4 `claude_hard` (217) | **adversarial**, 16 themes, untouched at round 4 | 85.69 | 91.66 | 98.92 |
+| **#5 `claude_hard2` (~190)** | **adversarial, untouched, measured once after everything** | **83.51** | **90.42** | **96.47** |
+
+The adversarial themes (`eval/llm_generate.py --hard`): several typos per string, keyboard-layout mixing («Aлматы»,
+«Turan аvenue»), the 2021 Kazakh Latin alphabet («Abai daŋğyly», «köşesi», «päter»), everything glued («ТолебиДом202кв17»),
+reversed order, corrections inside the string («нет, 12», «исправляю: кв 12», «жоқ қателестім 16 пәтер»), old city
+names in brackets («Семей (бывший Семипалатинск)»), 15-field strings, buildings instead of streets, dachas and garden
+societies, letter/range house numbers, Kazakh case suffixes («көшесінде», «даңғылындағы», «ықшам ауданда»), «/», «;»,
+«—» separators, PO boxes and military units, dictation style, initials and «имени».
+
+What rounds 3–4 changed (all covered by `api/tests/test_independent_benchmark.py`, 106 cases):
+
+* Kazakh case suffixes on keywords (locative / possessive / dative) and the 2021 Latin alphabet folded to ASCII, so
+  «daŋğyly», «köşesi», «üi», «päter», «şağyn audan» hit the lexicon; a token mixing scripts folds to its majority script.
+* Dacha / garden-society forms: «СТ/СНТ/СОТ/с/т/садоводство/дачный массив X» and Kazakh «X саяжайы», «X бау-бақша
+  серіктестігі» are living areas (the type word stripped, Q15); «5 линия», «линия 4», «7 аллея», «12 көше» are numbered
+  streets (name «5», type линия); «участок/уч./учаске N» is the house.
+* Corrections win: a number after «нет / ой / исправляю / точнее / жоқ / қателестім» replaces the most recent house or
+  detail; a keyword pair after the marker replaces the earlier pair; the result is absolute for the arbiter.
+* Brackets: «(бывш. Ленина)», «(бывший Семипалатинск)», «(Alma-Ata)», «(Астана)» are aliases, not values; «Нурпеисова
+  (Акбулак)» (an OSM name with its old name) stays whole.
+* Separators: a string with three or more «—» uses them as separators; a string with three or more «/» and no commas is
+  slash-separated (a tight «N/N» stays a fraction when «кв» is written elsewhere); «а/я 15» is a PO box, never a house.
+* Glue: «ТолебиДом», «ЖКХайвил», «Талгарскийр-н», «мкрСтроитель» split; «д11кв47» binds keyword-first.
+* «бутик / павильон / кабинет / бокс N» count as the apartment like «оф.» (Q13 widened; two of our own golds changed).
+* Arbiter: the tagger cannot override a gazetteer-confirmed «Аксай 4 мкр», a correction, a «7-7а» house pair, or an
+  explicit «ЖК X» with a span elsewhere; a model name span that starts or ends on a detail keyword or on the grammar's
+  street-type token loses; initials («К. Либкнехта») and Latin brand tails («Smart House», «Expo Avenue») are exempt;
+  model spans never contain a phone, a bracket alias, a postcode, a PO box or a separator; leading/trailing noise words
+  («частный», «номер», «тел») are trimmed off name spans on both sides.
+* Model v7 (warm start on the 789 Claude-labeled rows ×5 + 60k synthetic) was trained and rejected: +0.2 on the hard set,
+  −0.5 on dev_handmade — 789 rows overfit. More teacher data (5–10k Claude rows) is the next step, not a smaller one.
+
+Still wrong on the untouched hard set #5 (27 records, left as is): mostly the same label-vs-convention splits
+(«садоводство Энергетик» as a street, house ranges «170-172», «с/о Тобол» as a living area, number words «жиырма
+бесінші»), plus genuinely new patterns a sixth round would pick up.

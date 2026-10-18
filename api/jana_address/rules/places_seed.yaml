@@ -8,8 +8,8 @@
 
 cities:
   # --- cities of republican significance ---
-  - {name: Астана, kk: Астана, province: Астана, aliases: [нур-султан, нур султан, astana, nur-sultan, nursultan, целиноград]}
-  - {name: Алматы, kk: Алматы, province: Алматы, aliases: [almaty, алма-ата, алмата, алмаата]}
+  - {name: Астана, kk: Астана, province: Астана, aliases: [нур-султан, нур султан, нурсултан, astana, nur-sultan, nursultan, целиноград]}
+  - {name: Алматы, kk: Алматы, province: Алматы, aliases: [almaty, алма-ата, алмата, алмаата, alma-ata, almaata, alma ata]}
   - {name: Шымкент, kk: Шымкент, province: Шымкент, aliases: [shymkent, чимкент]}
   # --- regional centres ---
   - {name: Кокшетау, kk: Көкшетау, province: Акмолинская область, aliases: [kokshetau, кокчетав]}

@@ -42,6 +42,8 @@ stress-set (§2a) and independent-benchmark ([BENCHMARK.md](BENCHMARK.md)) fixes
 |---|---|---|---|---|---|
 | **independent benchmark — written & labeled by Claude Opus 5.5** ([BENCHMARK.md](BENCHMARK.md)) | 526 | 97.41 | 98.85 | **99.47** (97.08 on first contact) | 99.8 % |
 | **untouched held-out — second Claude set, measured once** ([BENCHMARK.md](BENCHMARK.md)) | 263 | 97.19 | 98.83 | **99.33** (main: 96.30) | 98.5 % |
+| **adversarial HARD set #4** — 16 themes of what breaks parsers, fixed against ([BENCHMARK.md](BENCHMARK.md)) | 217 | 89.30 | 90.10 | **98.92** (first contact 91.66, main 85.69) | 97.7 % |
+| **adversarial HARD set #5 — untouched, measured once after everything** | 190 | 94.54 | 94.10 | **96.47** (main 83.51, PR #3 head 90.42) | 87.4 % |
 | `test_handmade` — held out (see note) | 89 | 100.00 | 100.00 | **100.00** | 100 % |
 | `stress_handmade` — adversarial (§2a) | 106 | 97.66 | 99.85 | **100.00** | 100 % |
 | `dev_handmade` | 139 | 100.00 | 100.00 | **100.00** | 100 % |

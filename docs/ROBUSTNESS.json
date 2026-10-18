@@ -37,7 +37,7 @@
    "changed": 0
   },
   "commas_to_spaces": {
-   "score": 99.08,
+   "score": 99.04,
    "consistency": 98.32,
    "changed": 7
   },
@@ -154,7 +154,7 @@
    "all4": 1.0
   },
   "3plus_details": {
-   "n": 46,
+   "n": 47,
    "score": 100.0,
    "all4": 1.0
   },

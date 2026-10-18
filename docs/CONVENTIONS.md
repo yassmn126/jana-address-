@@ -51,7 +51,7 @@ Switches live in `api/jana_address/rules/conventions.yaml`; examples in `data/co
 | Q10 | Kazakh vs Russian | both first-class: Kazakh keywords, «ықшам аудан», ordinals «11-ші», name-before-type order, KK→RU city mapping | T | lexicon, grammar, examples ex37–ex41 |
 | Q11 | Kazakh district name («Әуезов ауданы») | as written («Әуезов») | T | `district_kk_to_ru: false` |
 | Q12 | Latin city («Astana») | as written | T | — |
-| Q13 | «оф.»/«каб.» → apartment | yes | T | `office_as_apartment` |
+| Q13 | «оф.»/«каб.»/«бутик»/«павильон» → apartment (a numbered unit inside a building) | yes | T | `office_as_apartment` |
 
 | Q14 | Kazakh-spelled village the gazetteer has no Russian name for («Қазығұрт ауылы») | as written («Қазығұрт»); Claude Opus 5.5 prefers the letter-folded «Казыгурт». «Байконыр» (no Kazakh letters) stays as written, «Орал» → «Уральск» (literal Kazakh form of a known city) | **?** | `gazetteer/osm.py: city_ru` |
 
