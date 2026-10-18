@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -223,5 +224,63 @@ def test_api_with_ai_keeps_the_jury_schema():
             st = tc.get("/api/v1/ai/status").json()
             assert st["stats"]["records"] == 3 and st["prompt_version"] == prompt_version()
             assert tc.post("/api/v1/parse/batch?ai=bogus", json=body).status_code == 422
+    finally:
+        ai_client.set_client(None)
+
+
+# ----------------------------------------------------------------------------- bring your own key
+_NO_CREDS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "JANA_AI_ASSUME_CREDENTIALS", "ANTHROPIC_WORKSPACE_ID")
+
+
+def test_request_key_makes_its_own_client(monkeypatch):
+    """A key sent with one request builds a transient client with that key (+ workspace header), shares the cost meter
+    with the process-wide client, and never shows up in status() or a repr."""
+    for v in _NO_CREDS:
+        monkeypatch.delenv(v, raising=False)
+    seen = {}
+
+    class _Client:
+        def __init__(self, **kw):
+            seen.update(kw)
+            self.messages = types.SimpleNamespace(create=self._create)
+
+        def _create(self, **kw):
+            return types.SimpleNamespace(stop_reason="end_turn",
+                                         usage=types.SimpleNamespace(input_tokens=10, output_tokens=5),
+                                         content=[types.SimpleNamespace(type="text", text=json.dumps({"records": [ai_rec("r0")]}))])
+
+    monkeypatch.setitem(sys.modules, "anthropic", types.SimpleNamespace(Anthropic=_Client))
+    ai_client.set_client(None)
+    try:
+        base = ai_client.get_client()
+        assert base.available()[0] is False and base.status()["credentials"] == "none"
+        assert ai_client.client_for(None, None) is base
+        c = ai_client.client_for("sk-test-key", "wrkspc_t")
+        assert c is not base and c.available()[0] and c.status()["credentials"] == "request"
+        assert "sk-test-key" not in json.dumps(c.status()) + repr(c.cfg)
+        got = c.run_batch([{"id": "r0", "raw_address": "Абая 10"}])
+        assert "r0" in got
+        assert seen["api_key"] == "sk-test-key" and seen["default_headers"] == {"anthropic-workspace-id": "wrkspc_t"}
+        assert base.stats.requests == 1 and base.status()["credentials"] == "none"
+    finally:
+        ai_client.set_client(None)
+
+
+def test_api_key_travels_in_a_header(monkeypatch):
+    """The key is read from a header (never the URL); /ai/status says where credentials come from; /verify with no key
+    anywhere answers 401 with a hint instead of a slow SDK error; the key is never echoed back."""
+    pytest.importorskip("anthropic")
+    from jana_address.main import app
+    for v in _NO_CREDS:
+        monkeypatch.delenv(v, raising=False)
+    ai_client.set_client(None)
+    try:
+        with TestClient(app) as tc:
+            assert tc.get("/api/v1/ai/status").json()["credentials"] == "none"
+            st = tc.get("/api/v1/ai/status", headers={"X-Anthropic-Api-Key": "sk-test", "X-Anthropic-Workspace-Id": "wrkspc_t"}).json()
+            assert st["credentials"] == "request" and st["available"] and "sk-test" not in json.dumps(st)
+            r = tc.post("/api/v1/verify?provider=anthropic", json=[{"id": "1", "raw_address": "Алматы, Абая 10"}])
+            assert r.status_code == 401 and "ключ" in r.json()["detail"].lower()
+            assert tc.get("/api/v1/ai/status", headers={"X-Anthropic-Api-Key": " "}).json()["credentials"] == "none"
     finally:
         ai_client.set_client(None)

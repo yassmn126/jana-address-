@@ -111,6 +111,23 @@ python -m eval.ai_eval --gold data/hard3k/hard3k_s2026_gold.json --mode fallback
 python -m eval.ai_eval --gold data/hard3k/intl_s2026_gold.json --mode foreign                     # international
 ```
 
+### Bring your own key (no server-side credentials)
+
+The hosted demo may run with no `ANTHROPIC_API_KEY` at all. Every endpoint that can reach Claude (`/api/v1/verify`,
+`/api/v1/conflicts/scan`, the parse endpoints with `?ai=…`, `/api/v1/ai/status`) also reads the caller's own key from
+the request headers `X-Anthropic-Api-Key` and, for a user-scoped `sk-ant-usr-…` key, `X-Anthropic-Workspace-Id`.
+`client_for()` in `llm/client.py` builds a transient client around that key for the one request (sharing the
+process-wide cost meter); nothing is persisted or logged, the key is never accepted in a URL, and `status()` never
+echoes it. The web UI has the matching field («Ключ Anthropic», `web/src/components/AiKey.tsx`): the key is kept in
+that browser's localStorage and attached only to calls whose provider is Claude. Without any key `/verify` answers
+`401` with a hint; a rejected key maps to `401` too (`AuthenticationError`, or a user-scoped key without a workspace).
+
+```bash
+curl -s -X POST localhost:8000/api/v1/verify?provider=anthropic -H 'Content-Type: application/json' \
+     -H "X-Anthropic-Api-Key: $ANTHROPIC_API_KEY" -H "X-Anthropic-Workspace-Id: $ANTHROPIC_WORKSPACE_ID" \
+     -d '[{"id":"1","raw_address":"Алматы, ул. Абая 10, кв 5"}]'
+```
+
 A local model on the university GPU works with the same prompt: `JANA_AI_PROVIDER=openai-compatible
 OPENAI_BASE_URL=http://<gpu>:8000/v1 JANA_AI_MODEL=<served name>` (vLLM, `temperature=0`, JSON-schema guided decoding).
 That path keeps the data on campus.

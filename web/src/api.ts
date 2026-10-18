@@ -1,9 +1,11 @@
+import { aiHeaders } from "./lib/ai";
 import type { Conflict, ConflictCounts, ConflictList, ConflictStatus, Decision, FieldValues, RecordOut, Run, RunStats, ScanResult, VersionInfo } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 const STATUS_RU: Record<number, string> = {
   400: "неверный запрос",
+  401: "нужен ключ ИИ",
   404: "не найдено",
   413: "слишком много записей за один запрос",
   422: "неверный формат данных",
@@ -32,9 +34,9 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-const postJson = (body: unknown): RequestInit => ({
+const postJson = (body: unknown, headers: Record<string, string> = {}): RequestInit => ({
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", ...headers },
   body: JSON.stringify(body),
 });
 
@@ -63,9 +65,20 @@ export interface VerifyRow {
   issues: string[];
 }
 
-/** Side-effect free cross-check of ≤ 50 records against the external labeler. */
+/** Side-effect free cross-check of ≤ 50 records against the external labeler (the browser key rides in a header). */
 export const verifyRecords = (records: { id: string; raw_address: string }[], provider: string, model: string) =>
-  call<{ summary: unknown; records: VerifyRow[] }>(`/api/v1/verify?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`, postJson(records));
+  call<{ summary: unknown; records: VerifyRow[] }>(`/api/v1/verify?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`, postJson(records, aiHeaders(provider)));
+
+/** GET /api/v1/ai/status with the browser key, if any: where the Claude credentials come from and the cost so far. */
+export interface AiStatus {
+  available: boolean;
+  reason: string;
+  provider: string;
+  model: string;
+  credentials: "request" | "server" | "none";
+  stats: { requests: number; records: number; cost_usd: number };
+}
+export const aiStatus = (): Promise<AiStatus> => call("/api/v1/ai/status", { headers: aiHeaders() });
 
 /** Is the AI tooling in this API build? An empty batch costs no LLM call: 200 = yes, 503 = the jury image without it. */
 export async function aiAvailable(): Promise<boolean> {
@@ -81,7 +94,7 @@ export const listConflicts = (status: ConflictStatus | "all" = "pending", limit 
   call(`/api/v1/conflicts?status=${status}&limit=${limit}`);
 
 export const scanConflicts = (records: { id: string; raw_address: string }[], provider: string, model: string): Promise<ScanResult> =>
-  call(`/api/v1/conflicts/scan?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`, postJson(records));
+  call(`/api/v1/conflicts/scan?provider=${encodeURIComponent(provider)}&model=${encodeURIComponent(model)}`, postJson(records, aiHeaders(provider)));
 
 export const resolveConflict = (id: string, decision: Decision): Promise<{ item: Conflict; correction_path: string | null; counts: ConflictCounts }> =>
   call(`/api/v1/conflicts/${encodeURIComponent(id)}/resolve`, postJson(decision));

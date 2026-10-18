@@ -36,3 +36,34 @@ export function saveProvider(provider: string, model: string) {
 }
 
 export const providerLabel = (id: string, model = "") => providerEntry(id, model).label;
+
+/* ---------------------------------------------------------------- bring your own Claude key
+ * Kept in this browser's localStorage only; sent to the API in request headers (never a URL) when the provider is
+ * Claude. The API uses it for that request and neither stores nor logs it (api/jana_address/main.py). */
+const KEY_KEY = "jana-address/anthropic/key";
+const WS_KEY = "jana-address/anthropic/workspace";
+
+export function savedKey(): { apiKey: string; workspaceId: string } {
+  try {
+    return { apiKey: localStorage.getItem(KEY_KEY) ?? "", workspaceId: localStorage.getItem(WS_KEY) ?? "" };
+  } catch {
+    return { apiKey: "", workspaceId: "" };
+  }
+}
+
+export function saveKey(apiKey: string, workspaceId: string) {
+  try {
+    const k = apiKey.trim();
+    const w = workspaceId.trim();
+    if (k) localStorage.setItem(KEY_KEY, k); else localStorage.removeItem(KEY_KEY);
+    if (w) localStorage.setItem(WS_KEY, w); else localStorage.removeItem(WS_KEY);
+  } catch { /* storage blocked */ }
+}
+
+/** Headers for a call that may reach Claude: the browser key when the provider is Claude and a key is saved. */
+export function aiHeaders(provider = "anthropic"): Record<string, string> {
+  if (provider !== "anthropic") return {};
+  const { apiKey, workspaceId } = savedKey();
+  if (!apiKey) return {};
+  return { "X-Anthropic-Api-Key": apiKey, ...(workspaceId ? { "X-Anthropic-Workspace-Id": workspaceId } : {}) };
+}

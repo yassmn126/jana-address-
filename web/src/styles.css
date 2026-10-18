@@ -777,3 +777,16 @@ mark { padding: 1px 3px; border-radius: 5px; color: var(--text); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* =============================================================================
+   Bring-your-own Claude key (components/AiKey.tsx): status line + password field, browser storage only
+   ============================================================================= */
+.ai-key { margin-top: 12px; display: grid; gap: 8px; }
+.ai-key-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--text-2, var(--text)); }
+.ai-key-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
+.ai-key-dot.is-ok { background: var(--brand); }
+.ai-key-dot.is-flag { background: var(--flag-ink); }
+.ai-key-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ai-key-form .inline-field input { width: 250px; font-family: var(--font-mono); font-size: 12.5px; }
+.ai-key.is-compact .ai-key-form .inline-field input { width: 190px; }
+.ai-key-note { flex-basis: 100%; margin: 0; font-size: 12.5px; color: var(--text-3); }

@@ -5,6 +5,7 @@ import { Drawer } from "../components/Drawer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Mascot } from "../components/Mascot";
 import { DEFAULT_PAGE_SIZE, FilterChip, PAGE_SIZES, Pagination, SearchField, Segmented, TableCard } from "../components/table";
+import { AiKeyField } from "../components/AiKey";
 import { AI_OFF_TEXT } from "../components/record";
 import { Chip, ConfChip, ErrorNote, IconCheck, IconChevronRight, IconCompare, IconText, type ChipStatus } from "../components/ui";
 import { ADDRESSES, count, fmtInt, fmtScore, fmtWhen } from "../format";
@@ -325,6 +326,7 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
           </button>
         </div>}
       </div>
+      {ai !== false && <AiKeyField provider={provider} />}
       {pasting && ai !== false && (
         <form className="scan-paste" onSubmit={(e) => { e.preventDefault(); scan(lines.map((l, i) => ({ id: `conflict_${Date.now()}_${i + 1}`, raw_address: l }))); }}>
           <textarea className="field" rows={3} value={paste} onChange={(e) => setPaste(e.target.value)} aria-label="Адреса, по одному в строке" spellCheck={false} />

@@ -319,9 +319,11 @@ The jury image contains no credentials, no Claude SDK and makes no network calls
 | Render (the online demo) | Dashboard → service `jana-address-api` → *Environment* → add `ANTHROPIC_API_KEY` and, for a user-scoped key (`sk-ant-usr-…`), `ANTHROPIC_WORKSPACE_ID` → Save → redeploy. The image already has the SDK (`api/Dockerfile.render`). |
 | your laptop, from the repo | `cp .env.example .env`, put the key there, `make api-dev` — or sign in once with `ant auth login` and set `JANA_AI_ASSUME_CREDENTIALS=1` |
 | your laptop, in Docker | `docker compose -f docker-compose.yml -f docker-compose.ai.yml up --build` (reads `.env`) |
+| **no access to any dashboard** (bring your own key) | in the UI, «Сверка с внешним ИИ» → **Ключ Anthropic**: paste your key. It stays in that browser's storage and travels to the API in a request header (`X-Anthropic-Api-Key`, plus `X-Anthropic-Workspace-Id` for `sk-ant-usr-…` keys), is used for that request and is neither stored nor logged. The online demo needs no server-side key at all. |
 
-The key goes into the Console once and into those places only — never into a chat, a commit or an image. In the UI the
-provider menu («Сверка с внешним ИИ») lists Claude Fable 5.1, Opus 5.5, Haiku 5.5, a local LLM and «Только правила».
+The key goes into the Console once and into those places only — never into a chat, a commit, a URL or an image. In the UI
+the provider menu («Сверка с внешним ИИ») lists Claude Fable 5.1, Opus 5.5, Haiku 5.5, a local LLM and «Только правила»;
+`GET /api/v1/ai/status` reports `credentials: server | request | none`.
 
 ---
 

@@ -7,6 +7,7 @@ import { explain, loadCalibrator, type Explanation } from "../lib/explain";
 import { REVIEW_THRESHOLD } from "../stats";
 import { useService } from "../state/service";
 import { FIELD_LABELS, PRECISION_LABELS, type Field, type Precision, type RecordOut } from "../types";
+import { AiKeyField } from "./AiKey";
 import { IconCompare, IconExternal, IconInfo, IconMapPin } from "./ui";
 
 /** Big score, bar with the 0.70 threshold mark. */
@@ -169,6 +170,7 @@ export function AiCheck({ r }: { r: RecordOut }) {
         )}
       </div>
       {ai === false && <p className="insp-note">{AI_OFF_TEXT}</p>}
+      {ai !== false && <AiKeyField provider={provider} compact />}
       {state.status === "agree" && <p className="ai-check-result is-ok">ИИ разметил строку так же.</p>}
       {state.status === "diff" && (
         <div className="ai-check-result is-flag">
