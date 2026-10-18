@@ -43,9 +43,10 @@ the stress-set fixes (§2a).
 | `stress_handmade` — adversarial (§2a) | 106 | 97.66 | 99.75 | **100.00** | 100 % |
 | `dev_handmade` | 139 | 100.00 | 100.00 | **100.00** | 100 % |
 | `conventions_examples` | 42 | 100.00 | 100.00 | **100.00** | 100 % |
-| synthetic dev (other seed, in-distribution) | 5 000 | 91.99 | 99.45 | **99.42** | 97.5 % |
+| `rural_handmade` — villages, district centres, Kazakh village strings, post pickups | 40 | 98.48 | 99.25 | **99.62** | 97.5 % |
+| synthetic dev (other seed, in-distribution) | 5 000 | 92.35 | 99.45 | **99.34** | 97.3 % |
 
-The one remaining held-out error is ambiguous: «Байконыр» → «Байконур» (Kazakh name without Kazakh letters, convention Q2;
+Numbers as of the last `make ab` (the full history is in [EXPERIMENTS.md](EXPERIMENTS.md)). The one remaining held-out error is ambiguous: «Байконыр» → «Байконур» (Kazakh name without Kazakh letters, convention Q2;
 the label keeps it as written). Model choice between v4 and v4b was made on the stress set (99.60 → 99.90 hybrid before
 tuning); v4b is also better on the held-out set, which is reported, not used.
 
@@ -119,7 +120,7 @@ now stores every OSM house point (977k), street points and district centroids, s
   settlements. That's the «prevent bad input at the source» feature of their forms; the review UI can use it for corrections.
 * `make geocode-check` ([GEOCODING.md](GEOCODING.md)): 500 real OSM addresses from ~100 cities, typed in 7 messy styles
   (capitals, no type word, city last, Kazakh order, «д.»), parse → geocode → distance to the true point:
-  **97.4 % resolve to the exact building**, 97.6 % land within 2 km. This measures the parse → match chain; OSM's own
+  **96–97 % resolve to the exact building** (seed-dependent), ~98 % land within 2 km. This measures the parse → match chain; OSM's own
   accuracy is a separate question.
 
 Fixes this check found: renamed towns (OSM «Арал», «Саркан», «Казалы» vs the seed's «Аральск», «Сарканд», «Казалинск»);
