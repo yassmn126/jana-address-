@@ -174,7 +174,8 @@ class Gazetteer:
             return seed["name"], SEED
         s = self.settlement(written)
         if s and s["kk"] and norm(s["kk"]) == key and s["name"] and norm(s["name"]) != key \
-                and s["place"] in ("city", "town"):
+                and not re.search(r"\b(имени|им\.|село|поселок|посёлок|аул|станция)\b", s["name"].lower()):
+            # villages too («Қазығұрт» → «Казыгурт»), but not to a long official form («Село имени Турара Рыскулова»)
             return s["name"], OSM
         return None, None
 

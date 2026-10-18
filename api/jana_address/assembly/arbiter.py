@@ -26,7 +26,7 @@ KEYWORD_RULES = {"kw_glued", "kw_prev", "kw_next"}
 # positional guesses of the grammar (no keyword evidence): the model may override them more easily
 WEAK_RULES = {"fallback_word_number", "house_fallback", "city_seed", "after_street", "micro_as_living", "gazetteer_chunk",
               "fallback_word_sep_number", "after_street_sep", "leftover_chunk", "fallback_micro_number", "dash_after_house",
-              "city_fuzzy"}
+              "city_fuzzy", "city_osm_chunk"}
 # spans whose boundaries come from an explicit keyword («район Есиль», «г. Алматы», «ЖК Томирис», «Актюбинская обл»):
 # they win overlaps against model spans
 ANCHORED_RULES = KEYWORD_RULES | {"district_kw", "city_kw", "city_kk_suffix", "living_kw", "province_table", "type_kw"}

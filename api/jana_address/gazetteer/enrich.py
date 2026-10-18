@@ -34,7 +34,10 @@ def enrich(fields: dict, prov: dict, rp: RuleParse, gz: Gazetteer | None = None)
     # 0. «Ақтөбе» / «Орал» written → Russian name. The seed already did this inside the parser for big cities.
     if fields["city"] and prov.get("city") == "string" and conv.get("city_kk_to_ru", True):
         ru, src = gz.city_ru(fields["city"])
-        if ru and (_KK_LETTERS.search(fields["city"]) or ru.lower() != fields["city"].lower()):
+        # OSM pairs only for a genuinely Kazakh spelling («Ақтөбе», «Қазығұрт»); the seed's curated pairs
+        # («Орал» → «Уральск») also for names without Kazakh letters. «Отеген батыр» is Russian already.
+        if ru and ((src == "gazetteer:osm" and _KK_LETTERS.search(fields["city"]))
+                   or (src != "gazetteer:osm" and (_KK_LETTERS.search(fields["city"]) or ru.lower() != fields["city"].lower()))):
             fields["city"], prov["city"] = ru, f"string+{src}"
 
     # 1. city from a city district

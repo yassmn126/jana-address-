@@ -95,3 +95,26 @@ def test_typo_city_kept_as_written_with_province_from_match():
     assert out["city"] == "Алмты" and out["province"] == "Алматы"
     out = rules("Павладар, ул. Естая 99")
     assert out["city"] == "Павладар" and out["province"] == "Павлодарская область"
+
+
+@pytest.mark.parametrize("raw,city", [
+    ("Карасайский район, Шамалган, ул. Ленина 2", "Шамалган"),          # a bare OSM village between separators
+    ("Казахстан, Алматы, ул. Абая 10", "Алматы"),                       # villages named «Казахстан» exist: not the city
+    ("Отеген батыр, ул. Титова 12", "Отеген батыр"),                     # Russian spelling stays as written
+    ("Түлкібас ауданы, Тұрар Рысқұлов ауылы, Жібек жолы көшесі 12", "Тұрар Рысқұлов"),   # no «ауылы» in the value
+])
+def test_village_cities(raw, city):
+    assert parse_one("x", raw)["city"] == city
+
+
+@pytest.mark.parametrize("raw,province,street,house", [
+    ("усть-каменогорск алматинская д.8а", None, "алматинская", "8а"),     # region adjective before a house = street
+    ("Актюбинская 12, кв 3", None, "Актюбинская", "12"),
+    ("Актюбинская обл, Хромтау, Абая 5", "Актюбинская область", "Абая", "5"),
+    ("АСТАНА, УЛ. КАРАГАНДИНСКАЯ 119", "Астана", "КАРАГАНДИНСКАЯ", "119"),
+])
+def test_region_named_streets(raw, province, street, house):
+    out = rules(raw)
+    assert (out["street_name"], out["house"]) == (street, house)
+    if province:
+        assert out["province"] == province

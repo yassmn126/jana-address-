@@ -1,88 +1,88 @@
 {
- "base": 99.96,
+ "base": 99.92,
  "transforms": {
   "lower": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "upper": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "nbsp": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "zwsp_after_comma": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "double_space": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "tab_newline": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "no_space_after_comma": {
-   "score": 99.92,
-   "consistency": 99.73,
+   "score": 99.89,
+   "consistency": 99.76,
    "changed": 1
   },
   "commas_to_spaces": {
-   "score": 98.31,
-   "consistency": 98.4,
-   "changed": 6
+   "score": 98.36,
+   "consistency": 98.08,
+   "changed": 8
   },
   "bom_prefix": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "country_prefix": {
-   "score": 99.96,
-   "consistency": 100.0,
-   "changed": 0
+   "score": 99.92,
+   "consistency": 99.76,
+   "changed": 1
   },
   "postcode_prefix": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "phone_suffix": {
-   "score": 99.88,
-   "consistency": 99.47,
+   "score": 99.86,
+   "consistency": 99.52,
    "changed": 2
   },
   "note_suffix": {
-   "score": 99.88,
-   "consistency": 99.47,
+   "score": 99.86,
+   "consistency": 99.52,
    "changed": 2
   },
   "trailing_dot": {
-   "score": 99.92,
-   "consistency": 99.73,
+   "score": 99.89,
+   "consistency": 99.76,
    "changed": 1
   },
   "kv_latin": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "kv_glued": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   },
   "semicolons": {
-   "score": 99.96,
+   "score": 99.92,
    "consistency": 100.0,
    "changed": 0
   }
@@ -94,22 +94,22 @@
    "all4": 1.0
   },
   "kazakh": {
-   "n": 33,
-   "score": 100.0,
-   "all4": 1.0
+   "n": 39,
+   "score": 99.62,
+   "all4": 0.9744
   },
   "latin": {
-   "n": 16,
+   "n": 17,
    "score": 100.0,
    "all4": 1.0
   },
   "microdistrict": {
-   "n": 77,
+   "n": 81,
    "score": 100.0,
    "all4": 1.0
   },
   "fraction_house": {
-   "n": 43,
+   "n": 44,
    "score": 100.0,
    "all4": 1.0
   },
@@ -124,22 +124,22 @@
    "all4": 1.0
   },
   "landmark": {
-   "n": 19,
+   "n": 20,
    "score": 100.0,
    "all4": 1.0
   },
   "living_area": {
-   "n": 26,
+   "n": 28,
    "score": 100.0,
    "all4": 1.0
   },
   "district_in_string": {
-   "n": 52,
-   "score": 100.0,
-   "all4": 1.0
+   "n": 80,
+   "score": 99.8,
+   "all4": 0.9875
   },
   "province_in_string": {
-   "n": 37,
+   "n": 55,
    "score": 100.0,
    "all4": 1.0
   },
@@ -149,7 +149,7 @@
    "all4": 1.0
   },
   "no_street_type": {
-   "n": 81,
+   "n": 85,
    "score": 100.0,
    "all4": 1.0
   },

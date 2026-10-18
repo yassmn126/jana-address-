@@ -83,7 +83,7 @@ offline-test: ## start the stack with NO network and run the sample through it
 # ------------------------------------------------------------------ ML track without train.json (cold start)
 OSM_URL ?= https://download.geofabrik.de/asia/kazakhstan-latest.osm.pbf
 SYNTH_N ?= 220000
-GOLD_SETS ?= --gold data/dev_handmade.json --gold data/conventions_examples.json --gold data/stress_handmade.json
+GOLD_SETS ?= --gold data/dev_handmade.json --gold data/conventions_examples.json --gold data/stress_handmade.json --gold data/rural_handmade.json
 
 osm: ## download the OSM Kazakhstan extract (225 MB, resumable) → data/osm/
 	mkdir -p data/osm && curl -L -C - --retry 10 -o data/osm/kazakhstan-latest.osm.pbf $(OSM_URL)

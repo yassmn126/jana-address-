@@ -428,6 +428,10 @@ class RuleParser:
                 if after is not None and toks[after].role == "street_type":
                     i = idxs[-1] + 1             # «Акмолинская ул. 5» — a street named after the region
                     continue
+                if len(idxs) == 1 and after is not None and toks[after].role != "province_kw" \
+                        and (toks[after].is_number_like or toks[after].role == "house_kw"):
+                    i = idxs[-1] + 1             # «алматинская д.8а», «Актюбинская 12» — a street, not the region
+                    continue
                 # swallow a following «область/обл» keyword
                 nxt = self._next_content(toks, idxs[-1])
                 if nxt is not None and toks[nxt].role == "province_kw":
@@ -822,6 +826,26 @@ class RuleParser:
                         break
                 if "CITY" in rp.spans:
                     break
+        # 5c'' a free word chunk standing alone between separators that OSM knows as a settlement
+        #      («Карасайский район, Шамалган, ул. Ленина 2») — the 7.8k OSM villages, not only the seed's towns
+        if "CITY" not in rp.spans:
+            i = 0
+            while i < n and "CITY" not in rp.spans:
+                if toks[i].kind == "WORD" and self._free(toks[i]) and not self._is_kw(toks[i]) and toks[i].text[:1].isupper() \
+                        and toks[i].role != "noise" and (i == 0 or toks[i - 1].is_sep):    # villages named «Казахстан» exist
+                    j = i
+                    while j + 1 < n and toks[j + 1].kind == "WORD" and self._free(toks[j + 1]) and not self._is_kw(toks[j + 1]):
+                        j += 1
+                    if (j + 1 >= n or toks[j + 1].is_sep) and j - i < 3:
+                        text = " ".join(toks[k].text for k in range(i, j + 1))
+                        if self._known_settlement(text):
+                            self._set(rp, "CITY", toks, list(range(i, j + 1)), "city_osm_chunk", 0.7)
+                            self._note_city(rp, text)
+                            rp.flags.append("city_from_osm_chunk")
+                            break
+                    i = j + 1
+                    continue
+                i += 1
         # 5c' first token, followed by a separator, one edit away from a city/town → city as written («Алмты,»)
         if "CITY" not in rp.spans:
             first = next((i for i, t in enumerate(toks) if t.kind != "PUNCT"), None)

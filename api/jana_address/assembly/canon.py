@@ -39,6 +39,16 @@ def _number(v: str | None) -> str | None:
     return v or None
 
 
+_CITY_PREFIX = re.compile(r"^(?:г|гор|город|пос|п|пгт|с|село|аул|ауыл|ст|станция)\.?\s+", re.IGNORECASE)
+_CITY_SUFFIX = re.compile(r"\s+(?:қаласы|каласы|ауылы|кенті|кенти|қ|г)\.?$", re.IGNORECASE)
+
+
+def _strip_settlement_words(city: str) -> str:
+    """The city value is the name only (brief): «Тұрар Рысқұлов ауылы» → «Тұрар Рысқұлов», «г. Алматы» → «Алматы»."""
+    out = _CITY_SUFFIX.sub("", _CITY_PREFIX.sub("", city)).strip()
+    return out or city
+
+
 def assemble(rp: RuleParse) -> tuple[dict, dict]:
     """Return (fields, provenance). Provenance: 'string' | 'string+table' | None (not found)."""
     fields: dict[str, str | None] = {f: None for f in FIELDS}
@@ -57,6 +67,7 @@ def assemble(rp: RuleParse) -> tuple[dict, dict]:
 
     city = _val(rp, "CITY")
     if city:
+        city = _strip_settlement_words(city)
         if rp.meta.get("city_ru_from_kk") and conv.get("city_kk_to_ru", True):
             # Kazakh-only mention («Қарағанды қаласы») → Russian name from the gazetteer (Q2).
             fields["city"] = rp.meta["city_ru_from_kk"]

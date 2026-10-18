@@ -31,7 +31,8 @@ from eval.metric import ADDRESS, DETAILS, REFS, norm, score  # noqa: E402
 from jana_address.service import parse_one  # noqa: E402
 
 SCORED = ADDRESS + DETAILS + REFS
-DEFAULT_GOLD = ["data/test_handmade.json", "data/stress_handmade.json", "data/dev_handmade.json", "data/conventions_examples.json"]
+DEFAULT_GOLD = ["data/test_handmade.json", "data/stress_handmade.json", "data/dev_handmade.json", "data/conventions_examples.json",
+                "data/rural_handmade.json"]
 
 
 def _kv_latin(s: str) -> str:
