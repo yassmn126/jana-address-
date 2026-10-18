@@ -1,16 +1,36 @@
 # Render Blueprint for the FastAPI backend (Dashboard → New → Blueprint → this repo).
-# Only api/ is deployed; the frontend lives on Vercel. The offline jury run still uses docker compose.
+# Only the API is deployed; the frontend lives on Vercel. The offline jury run still uses docker compose (api/Dockerfile).
 services:
   - type: web
     name: jana-address-api          # → https://jana-address-api.onrender.com
     runtime: docker
     plan: free                      # sleeps after 15 min idle; ~1 min cold start; no persistent disk
     region: frankfurt               # closest Render region to Kazakhstan; cannot be changed later
-    rootDir: api                    # pushes outside api/ don't trigger a redeploy
-    dockerfilePath: ./Dockerfile    # relative to rootDir → api/Dockerfile
-    dockerContext: .                # relative to rootDir → api/
+    # no rootDir: Render hides files outside rootDir, and the AI cross-check needs eval/ and training/
+    dockerfilePath: ./api/Dockerfile.render   # jury image + eval/llm_verify tooling + anthropic SDK
+    dockerContext: .                # repo root; the root .dockerignore allowlists what the image copies
     healthCheckPath: /health
     autoDeployTrigger: commit
+    buildFilter:                    # without rootDir every push would redeploy: only what the image contains does
+      paths:                        # (repo-root globs; keep in sync with the COPY lines of api/Dockerfile.render)
+        - api/jana_address/**
+        - api/artifacts/**
+        - api/requirements.txt
+        - api/requirements-render.txt
+        - api/Dockerfile.render
+        - .dockerignore
+        - eval/__init__.py
+        - eval/ab.py
+        - eval/metric.py
+        - eval/llm_verify.py
+        - training/__init__.py
+        - training/label_llm.py
+        - training/validate_labels.py
+        - training/prompts/label_system.md
+        - data/conventions_examples.json
     envVars:
       - key: PORT                   # Render routes to $PORT (default 10000); the Dockerfile serves on 8000
         value: "8000"
+      - key: ANTHROPIC_API_KEY      # provider=anthropic for /verify and /conflicts/scan; set it in the dashboard
+        sync: false                 # (Render asks only when the Blueprint is first created; on an existing
+                                    #  service add it under Environment). User-scoped key? also ANTHROPIC_WORKSPACE_ID

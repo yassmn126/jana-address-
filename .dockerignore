@@ -1,0 +1,19 @@
+# Only api/Dockerfile.render (Render) builds from the repo root; the jury and web images use ./api and ./web.
+# Allowlist: the build context gets exactly what that image copies — hackathon data (data/train.json, gold
+# files) must not leave the hackathon, and the OSM extract / node_modules would only slow the build.
+*
+!api/requirements.txt
+!api/requirements-render.txt
+!api/jana_address
+!api/artifacts
+!eval/__init__.py
+!eval/ab.py
+!eval/metric.py
+!eval/llm_verify.py
+!training/__init__.py
+!training/label_llm.py
+!training/validate_labels.py
+!training/prompts/label_system.md
+!data/conventions_examples.json
+**/__pycache__
+**/*.pyc

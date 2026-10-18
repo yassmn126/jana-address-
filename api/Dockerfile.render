@@ -1,0 +1,27 @@
+# Hosted API on Render (render.yaml): the jury image (api/Dockerfile) + the AI cross-check tooling, so
+# POST /api/v1/verify and /api/v1/conflicts/scan work there. The jury image stays api/Dockerfile (offline,
+# answers 503 on those two). Build context is the REPOSITORY ROOT, because eval/ and training/ live outside
+# api/; the root .dockerignore lets only the files below into it (never data/train.json & co.):
+#   docker build -f api/Dockerfile.render -t jana-address-api-render .
+# The layout mirrors the repo (/app/api, /app/eval, /app/training, /app/data): the tooling finds its files
+# from __file__. ANTHROPIC_API_KEY comes from the Render dashboard at run time, never from the image.
+FROM python:3.11-slim AS runtime
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+    JANA_DATA_DIR=/data
+WORKDIR /app/api
+COPY api/requirements.txt api/requirements-render.txt ./
+RUN pip install --no-cache-dir -r requirements-render.txt
+COPY api/jana_address ./jana_address
+COPY api/artifacts ./artifacts
+# what eval.llm_verify imports and reads — nothing else from eval/, training/ or data/ (keep in sync with
+# the root .dockerignore and buildFilter in render.yaml)
+COPY eval/__init__.py eval/ab.py eval/metric.py eval/llm_verify.py /app/eval/
+COPY training/__init__.py training/label_llm.py training/validate_labels.py /app/training/
+COPY training/prompts/label_system.md /app/training/prompts/
+COPY data/conventions_examples.json /app/data/
+RUN mkdir -p /data
+EXPOSE 8000
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=18 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if b'ok' in urllib.request.urlopen('http://127.0.0.1:8000/health').read() else 1)"
+CMD ["uvicorn", "jana_address.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

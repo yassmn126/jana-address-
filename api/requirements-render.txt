@@ -1,0 +1,3 @@
+# Render image (api/Dockerfile.render): the runtime + the Claude SDK for /api/v1/verify and /api/v1/conflicts/scan.
+-r requirements.txt
+anthropic==1.15.0      # beta.messages fallbacks / output_config used by training/label_llm.py
