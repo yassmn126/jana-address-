@@ -52,6 +52,9 @@ def main(argv=None) -> int:
         quantize_dynamic(str(fp32), str(final), weight_type=QuantType.QInt8)
         fp32.unlink()
     tok.backend_tokenizer.save(str(out / "tokenizer.json"))
+    stale = out / "model_meta.json"            # a char-CRF meta would make the runtime pick the wrong model kind
+    if stale.exists():
+        stale.rename(out / "model_meta.json.charcrf-disabled")
     shutil.copy(a.labels, out / "labels.json")
     print(f"→ {final} ({final.stat().st_size/1e6:.0f} MB), tokenizer.json, labels.json")
 

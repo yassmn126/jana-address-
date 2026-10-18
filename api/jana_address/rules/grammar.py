@@ -37,6 +37,8 @@ HERE = Path(__file__).parent
 DETAIL_FIELDS = ("APARTMENT", "ENTRANCE", "FLOOR")
 NUMBER_FIELDS = ("HOUSE",) + DETAIL_FIELDS
 ADJ_SUFFIXES = ("ский", "ская", "ской", "ское", "кий", "кая", "ной", "ный", "ная", "ий", "ый", "ая")
+CODE_WORDS = {"код", "кодом", "домофон", "домофона", "intercom", "пин"}
+CITY_WORDS_URBAN = {"город", "г", "гор", "қаласы", "каласы", "қ", "қала", "кала"}
 _HOUSE_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?$")
 
 
@@ -157,6 +159,8 @@ class RuleParser:
         if not toks:
             rp.flags.append("empty")
             return rp
+        self._split_glued_dom(rp)
+        self._phones(rp)
         self._classify(rp)
         self._province(rp)
         self._bind_numbers(rp, phase=1)      # glued + unambiguous keyword↔number pairs
@@ -169,9 +173,62 @@ class RuleParser:
         self._living_area(rp)
         self._street_fallback(rp)
         self._house_fallback(rp)
+        self._house_letter(rp)               # «Абая 10 Б» → house «10Б»
+        self._building_part(rp)              # the house may have been found only now
+        self._dash_apartment(rp)             # «Абая 10-5» → apartment 5
         self._landmark(rp)
+        self._street_leftover(rp)            # «Айнабулак-3, дом 150»: the only free chunk is the street
         self._leftovers(rp)
         return rp
+
+    # --------------------------------------------------------------- gazetteer-aware helpers (lazy import: osm.py imports us)
+    def _known_settlement(self, text: str) -> bool:
+        from ..gazetteer.osm import get_gazetteer
+        return get_gazetteer().settlement(text) is not None
+
+    def _fuzzy_city(self, text: str):
+        from ..gazetteer.osm import get_gazetteer
+        return get_gazetteer().fuzzy_city(text)
+
+    def _known_microdistrict(self, rp: RuleParse, text: str) -> bool:
+        from ..gazetteer.osm import get_gazetteer
+        city = rp.meta.get("city_known") or rp.meta.get("city_text")
+        return bool(city) and get_gazetteer().is_microdistrict(city, text)
+
+    def _dash_apartment(self, rp: RuleParse):
+        """«Абая 10-5», «Ермекова 58/3-12», «Кутузова 204 - 12»: house-dash-number with no keyword → apartment."""
+        toks = rp.tokens
+        sp = rp.spans.get("HOUSE")
+        if sp is None or "APARTMENT" in rp.spans:
+            return
+        k = next((i for i, t in enumerate(toks) if t.end == sp.end), None)
+        if k is None or k + 2 >= len(toks):
+            return
+        dash, num = toks[k + 1], toks[k + 2]
+        if dash.kind == "PUNCT" and dash.text == "-" and num.kind == "NUM" and self._free(num) \
+                and (k + 3 >= len(toks) or toks[k + 3].is_sep or toks[k + 3].role in ("entrance_kw", "floor_kw", "landmark_kw")):
+            self._set(rp, "APARTMENT", toks, [k + 2], "dash_after_house", 0.65)
+            dash.label = "O"
+            rp.flags.append("dash_apartment")
+
+    def _street_leftover(self, rp: RuleParse):
+        """House found via its keyword, no street, exactly one free word chunk left → that chunk is the street."""
+        if "STREET_NAME" in rp.spans or "HOUSE" not in rp.spans:
+            return
+        toks = rp.tokens
+        chunks, cur = [], []
+        for i, t in enumerate(toks):
+            if t.label is None and t.kind == "WORD" and t.role is None and match_view(t.text) not in self.lex.city_by_name:
+                cur.append(i)
+            elif cur:
+                chunks.append(cur)
+                cur = []
+        if cur:
+            chunks.append(cur)
+        if len(chunks) == 1:
+            self._set(rp, "STREET_NAME", toks, chunks[0], "leftover_chunk", 0.55)
+            rp.flags.append("street_without_type")
+            rp.flags.append("street_from_leftover")
 
     # --------------------------------------------------------------- helpers
     @staticmethod
@@ -211,10 +268,58 @@ class RuleParser:
     def _is_kw(self, t: Token) -> bool:
         return bool(t.role) and t.role not in ("noise",)
 
+    def _phones(self, rp: RuleParse):
+        """«87011234567», «+7 701 555 44 33», «8 (777) 123-45-67» → O (never a house / apartment)."""
+        toks = rp.tokens
+        n = len(toks)
+        i = 0
+        while i < n:
+            t = toks[i]
+            if t.kind == "NUM" and len(t.text) >= 9:
+                t.label, t.role = "O", "phone"
+                rp.flags.append("phone")
+                i += 1
+                continue
+            j = i + 1 if t.text == "+" else i
+            if j < n and toks[j].kind == "NUM" and toks[j].text in ("7", "8"):
+                k, digits, idxs = j + 1, 1, [i, j] if j != i else [j]
+                while k < n and (toks[k].kind == "NUM" or toks[k].text in ("(", ")", "-")) and digits < 11:
+                    if toks[k].kind == "NUM":
+                        digits += len(toks[k].text)
+                    idxs.append(k)
+                    k += 1
+                if digits == 11:
+                    for x in idxs:
+                        toks[x].label, toks[x].role = "O", "phone"
+                    rp.flags.append("phone")
+                    i = k
+                    continue
+            i += 1
+
+    def _split_glued_dom(self, rp: RuleParse):
+        """«5мкр 12д 34кв»: when other numbers in the string are glued to keywords, «12д» is «12» + «д(ом)»,
+        not a house with the letter Д. Splits the ALNUM token in place (offsets unchanged)."""
+        toks = rp.tokens
+        glued = sum(1 for a, b in zip(toks, toks[1:]) if a.kind == "NUM" and b.kind == "WORD" and not b.space_before
+                    and (self.lex.roles_of(b) & {"house_kw", "apartment_kw", "entrance_kw", "floor_kw", "street_type"}))
+        if glued == 0:
+            return
+        out: list[Token] = []
+        for t in toks:
+            if t.kind == "ALNUM" and t.text[-1] in "дД" and len(t.text) >= 2:
+                out.append(Token(t.text[:-1], t.start, t.end - 1, "NUM", t.space_before))
+                out.append(Token(t.text[-1], t.end - 1, t.end, "WORD", False))
+                rp.flags.append("glued_dom_split")
+            else:
+                out.append(t)
+        rp.tokens[:] = out
+
     # ------------------------------------------------------------- pass 0
     def _classify(self, rp: RuleParse):
         toks = rp.tokens
         for i, t in enumerate(toks):
+            if t.role == "phone":
+                continue
             if t.kind == "NUM" and len(t.text) == 6 and i + 1 < len(toks) and not toks[i + 1].is_number_like:
                 t.label, t.role = "O", "postcode"
                 rp.flags.append("postcode")
@@ -229,6 +334,20 @@ class RuleParser:
             roles = self.lex.roles_of(t)
             if not self.lex.conventions.get("office_as_apartment", True) and norm_token(t.text) in ("оф", "офис", "office", "каб", "кабинет"):
                 roles.discard("apartment_kw")
+            if "street_type" in roles and len(norm_token(t.text)) == 1 and not (t.end < len(rp.raw) and rp.raw[t.end] == "."):
+                roles.discard("street_type")         # «у получателя» is not «улица получателя»; «у.» / «ш.» are
+            if norm_token(t.text) in CODE_WORDS:
+                t.role, t.label = "code_kw", "O"
+                # «код подъезда 1234», «домофон 25», «код 12#»: the number (and a following «подъезда») are not values
+                j = i + 1
+                while j < len(toks) and j <= i + 2 and (toks[j].kind == "PUNCT" and toks[j].text in self.SKIP_PUNCT
+                                                       or norm_token(toks[j].text) in ("подъезда", "подъезд", "двери", "домофона", "от")):
+                    toks[j].label = "O"
+                    j += 1
+                if j < len(toks) and toks[j].is_number_like:
+                    toks[j].label = "O"
+                    rp.flags.append("door_code")
+                continue
             if "street_type" in roles:
                 t.role = "street_type"
                 t.meta["lemma"] = self.lex.street_type(t)
@@ -284,6 +403,10 @@ class RuleParser:
             if toks[i].kind != "WORD" or not self._free(toks[i]):
                 i += 1
                 continue
+            prev = self._prev_content(toks, i)
+            if prev is not None and toks[prev].role == "street_type":
+                i += 1                       # «ул. Карагандинская 119» is a street named after the region
+                continue
             best = None
             # try longest n-gram of consecutive WORD tokens (dots allowed between)
             words: list[int] = []
@@ -301,6 +424,14 @@ class RuleParser:
                 j += 1
             if best:
                 idxs, p = best
+                after = self._next_content(toks, idxs[-1])
+                if after is not None and toks[after].role == "street_type":
+                    i = idxs[-1] + 1             # «Акмолинская ул. 5» — a street named after the region
+                    continue
+                if len(idxs) == 1 and after is not None and toks[after].role != "province_kw" \
+                        and (toks[after].is_number_like or toks[after].role == "house_kw"):
+                    i = idxs[-1] + 1             # «алматинская д.8а», «Актюбинская 12» — a street, not the region
+                    continue
                 # swallow a following «область/обл» keyword
                 nxt = self._next_content(toks, idxs[-1])
                 if nxt is not None and toks[nxt].role == "province_kw":
@@ -335,7 +466,7 @@ class RuleParser:
         def cand_prev(i: int) -> int | None:
             p = self._prev_content(toks, i)
             if p is not None and toks[p].is_number_like and self._free(toks[p]):
-                # «55/6» fraction belongs to the house: walk back to the leading number
+                # «55/6» fraction belongs to the house: walk back to the leading number («3/9 этаж» → floor 3 of 9)
                 if p - 2 >= 0 and toks[p - 1].is_slash and toks[p - 2].is_number_like and self._free(toks[p - 2]):
                     return p - 2
                 return p
@@ -357,13 +488,16 @@ class RuleParser:
         def bind(kw: int, num: int, direction: str):
             fieldname = field_of(toks[kw])
             idxs = [num]
-            if fieldname == "HOUSE":
-                # extend fraction: NUM / NUM
-                if num + 2 < len(toks) and toks[num + 1].is_slash and toks[num + 2].is_number_like and self._free(toks[num + 2]):
-                    idxs = [num, num + 1, num + 2]
+            if num + 2 < len(toks) and toks[num + 1].is_slash and toks[num + 2].is_number_like and self._free(toks[num + 2]):
+                if fieldname == "HOUSE":
+                    idxs = [num, num + 1, num + 2]             # «55/6» stays a fraction
+                else:
+                    toks[num + 1].label = toks[num + 2].label = "O"   # «3/9 этаж» → 3 (of 9 floors)
+                    rp.flags.append("floor_of_total")
             if fieldname in rp.spans:
                 rp.flags.append(f"duplicate_{fieldname.lower()}")
                 toks[kw].label = "O"
+                pending.discard(kw)          # without this the fixpoint loop below never terminates
                 return
             self._set(rp, fieldname, toks, idxs, f"kw_{direction}", 0.95 if direction == "glued" else 0.9)
             toks[kw].label = "O"
@@ -377,11 +511,16 @@ class RuleParser:
         for kw in sorted(pending):
             t = toks[kw]
             p = cand_prev(kw)
-            if p is not None and not t.space_before and toks[kw - 1] is toks[p]:
+            q = cand_next(kw)
+            glued_prev = p is not None and not t.space_before and toks[kw - 1] is toks[p]
+            glued_next = q is not None and toks[q].start == t.end
+            if glued_prev and glued_next and p >= 1 and toks[p - 1].kind == "WORD" and not toks[p].space_before \
+                    and toks[p - 1].role is None:
+                glued_prev = False                                 # «Жандосова58кв12»: 58 belongs to the street
+            if glued_prev:
                 bind(kw, p, "glued")
                 continue
-            q = cand_next(kw)
-            if q is not None and toks[q].start == t.end:          # «кв70»
+            if glued_next:                                         # «кв70»
                 bind(kw, q, "glued")
         # pass 2b: single candidate, iterate to a fixpoint
         changed = True
@@ -402,8 +541,9 @@ class RuleParser:
             for kw in sorted(pending):
                 p, q = cand_prev(kw), cand_next(kw)
                 if p is None and q is None:
-                    toks[kw].label = "O"
-                    rp.flags.append("keyword_without_number")
+                    if toks[kw].role != "ambiguous_p":       # «п. Ботакара» is a settlement: leave it to the city pass
+                        toks[kw].label = "O"
+                        rp.flags.append("keyword_without_number")
                     continue
                 if prefer_prev:
                     bind(kw, p, "prev")
@@ -457,12 +597,30 @@ class RuleParser:
                 # trailing number
                 k = self._next_content(toks, name[-1]) if name else None
                 if k is not None and toks[k].is_number_like and self._free(toks[k]):
-                    if micro and self._number_belongs_to_name(rp, k):
+                    house_later = "HOUSE" in rp.spans and rp.spans["HOUSE"].start > toks[k].end
+                    if (micro and self._number_belongs_to_name(rp, k)) or (house_later and toks[k].kind == "NUM"):
                         name.append(k)
                         k2 = self._next_content(toks, k)
                         if k2 is not None and toks[k2].is_number_like and self._free(toks[k2]) and toks[k2 - 1].is_sep:
                             house = self._house_idxs(toks, k2)
                     else:
+                        house = self._house_idxs(toks, k)
+            elif j is not None and toks[j].kind == "NUM" and self._free(toks[j]) and not micro and (
+                    (p0 := self._prev_content(toks, kw_idxs[0])) is None or toks[p0].is_sep
+                    or not (toks[p0].kind == "WORD" and self._free(toks[p0]) and not self._is_kw(toks[p0]))) and (
+                    (nxt := self._next_content(toks, j)) is not None and (
+                        (toks[nxt].kind == "WORD" and self._free(toks[nxt]) and not self._is_kw(toks[nxt]))
+                        or (toks[nxt].is_sep and (n2 := self._next_content(toks, nxt)) is not None
+                            and (toks[n2].role == "house_kw" or toks[n2].is_number_like)))):
+                case = "A"
+                name = [j]
+                if toks[nxt].kind == "WORD":
+                    k = nxt
+                    while k < n and toks[k].kind == "WORD" and self._free(toks[k]) and not self._is_kw(toks[k]):
+                        name.append(k)
+                        k += 1
+                    k = self._next_content(toks, name[-1])
+                    if k is not None and toks[k].is_number_like and self._free(toks[k]):
                         house = self._house_idxs(toks, k)
             else:
                 p = self._prev_content(toks, kw_idxs[0])
@@ -475,6 +633,8 @@ class RuleParser:
                         name.append(k)
                         k = self._prev_content(toks, k)
                     while k is not None and k >= 0 and toks[k].kind == "WORD" and self._free(toks[k]) and not self._is_kw(toks[k]):
+                        if name and match_view(toks[k].text) in self.lex.city_by_name and (k == 0 or toks[k - 1].is_sep):
+                            break            # «Алматы Жетысу 2 мкр»: the city is not part of the name
                         name.append(k)
                         k = self._prev_content(toks, k)
                         if k is not None and toks[k].is_sep:
@@ -529,8 +689,29 @@ class RuleParser:
             k3 = self._next_content(toks, k2)
             if k3 is not None and toks[k3].is_number_like and self._free(toks[k3]):
                 return True                           # second number follows after a comma
-        # «Аксай 3а» — a letter suffix on the number rarely denotes a house in this position
-        return toks[k].kind == "ALNUM" and k2 is not None and toks[k2].is_sep
+        if k2 is not None and toks[k2].is_number_like and self._free(toks[k2]):
+            return True                               # «Аксай 1а 12»: two numbers in a row, the first is the name's
+        if k2 is not None and toks[k2].role == "house_kw":
+            k3 = self._next_content(toks, k2)
+            if k3 is not None and toks[k3].is_number_like and self._free(toks[k3]):
+                return True                           # «Нурсат 2 дом 14»
+        # «Аксай 3а, 59» — a letter suffix on the number rarely denotes a house in this position,
+        # unless nothing else in the string can be the house («Алмагуль 9а, кв 47» → house 9а)
+        return toks[k].kind == "ALNUM" and k2 is not None and toks[k2].is_sep and self._free_number_after(toks, k2)
+
+    def _free_number_after(self, toks: list[Token], i: int) -> bool:
+        """Is there a number after i that is not bound (or about to be bound) to a detail keyword?"""
+        detail = {"apartment_kw", "entrance_kw", "floor_kw", "ambiguous_p"}
+        for j in range(i + 1, len(toks)):
+            t = toks[j]
+            if not t.is_number_like or not self._free(t):
+                continue
+            prev = toks[j - 1] if j > 0 else None
+            nxt = toks[j + 1] if j + 1 < len(toks) else None
+            if (prev is not None and prev.role in detail) or (nxt is not None and nxt.role in detail):
+                continue
+            return True
+        return False
 
     def _house_idxs(self, toks: list[Token], k: int) -> list[int]:
         idxs = [k]
@@ -581,6 +762,10 @@ class RuleParser:
             j = self._next_content(toks, i)
             if j is None or toks[j].kind != "WORD" or not self._free(toks[j]) or self._is_kw(toks[j]):
                 continue
+            if len(norm_token(t.text)) == 1 and not (t.end < len(rp.raw) and rp.raw[t.end] == ".") \
+                    and not toks[j].text[0].isupper() and match_view(toks[j].text) not in self.lex.city_by_name \
+                    and not self._known_settlement(toks[j].text):
+                continue                     # «рядом с мечетью»: «с» is a preposition here, not «село»
             idxs = []
             k = j
             while k < n and toks[k].kind == "WORD" and self._free(toks[k]) and not self._is_kw(toks[k]):
@@ -594,6 +779,7 @@ class RuleParser:
                 continue
             self._set(rp, "CITY", toks, idxs, "city_kw", 0.9)
             self._note_city(rp, " ".join(toks[k].text for k in idxs))
+            rp.meta["city_kind"] = "city" if norm_token(t.text) in CITY_WORDS_URBAN else "village"
         # 5b Kazakh suffix: «Ақтөбе қаласы», «Боралдай ауылы»
         for i, t in enumerate(toks):
             if t.role != "city_suffix_kk" or not self._free(t):
@@ -618,6 +804,7 @@ class RuleParser:
                 continue
             self._set(rp, "CITY", toks, idxs, "city_kk_suffix", 0.8)
             rp.flags.append("city_kk_only")
+            rp.meta["city_kind"] = "city" if norm_token(t.text) in CITY_WORDS_URBAN else "village"
             self._note_city(rp, " ".join(toks[k].text for k in idxs), kk=True)
         # 5c bare seed match (prefer the first free WORD chunk that is a known city)
         if "CITY" not in rp.spans:
@@ -639,6 +826,37 @@ class RuleParser:
                         break
                 if "CITY" in rp.spans:
                     break
+        # 5c'' a free word chunk standing alone between separators that OSM knows as a settlement
+        #      («Карасайский район, Шамалган, ул. Ленина 2») — the 7.8k OSM villages, not only the seed's towns
+        if "CITY" not in rp.spans:
+            i = 0
+            while i < n and "CITY" not in rp.spans:
+                if toks[i].kind == "WORD" and self._free(toks[i]) and not self._is_kw(toks[i]) and toks[i].text[:1].isupper() \
+                        and toks[i].role != "noise" and (i == 0 or toks[i - 1].is_sep):    # villages named «Казахстан» exist
+                    j = i
+                    while j + 1 < n and toks[j + 1].kind == "WORD" and self._free(toks[j + 1]) and not self._is_kw(toks[j + 1]):
+                        j += 1
+                    if (j + 1 >= n or toks[j + 1].is_sep) and j - i < 3:
+                        text = " ".join(toks[k].text for k in range(i, j + 1))
+                        if self._known_settlement(text):
+                            self._set(rp, "CITY", toks, list(range(i, j + 1)), "city_osm_chunk", 0.7)
+                            self._note_city(rp, text)
+                            rp.flags.append("city_from_osm_chunk")
+                            break
+                    i = j + 1
+                    continue
+                i += 1
+        # 5c' first token, followed by a separator, one edit away from a city/town → city as written («Алмты,»)
+        if "CITY" not in rp.spans:
+            first = next((i for i, t in enumerate(toks) if t.kind != "PUNCT"), None)
+            if first is not None and toks[first].kind == "WORD" and self._free(toks[first]) and not self._is_kw(toks[first]) \
+                    and first + 1 < n and toks[first + 1].is_sep and toks[first].text[0].isupper():
+                fz = self._fuzzy_city(toks[first].text)
+                if fz:
+                    self._set(rp, "CITY", toks, [first], "city_fuzzy", 0.6)
+                    self._note_city(rp, fz["name"])
+                    rp.meta["city_text"] = toks[first].text        # output stays as written
+                    rp.flags.append("city_fuzzy_match")
         # 5d duplicates of the found city elsewhere in the string → O
         if "CITY" in rp.spans:
             city_key = match_view(rp.meta.get("city_text", ""))
@@ -723,14 +941,61 @@ class RuleParser:
                     k += 1
                 q = self._next_content(toks, idxs[-1])
                 if q is not None and toks[q].is_number_like and self._free(toks[q]) and not toks[q - 1].is_sep:
+                    q2 = self._next_content(toks, q)
+                    second = None
+                    if q2 is not None and toks[q2].is_sep:
+                        q3 = self._next_content(toks, q2)
+                        if q3 is not None and toks[q3].is_number_like and self._free(toks[q3]):
+                            second = q3
+                    elif q2 is not None and toks[q2].role == "house_kw" or (q2 is not None and "HOUSE" in rp.spans
+                                                                             and rp.spans["HOUSE"].start >= toks[q2].start):
+                        second = -1
+                    if second is not None and self._known_microdistrict(rp, " ".join(toks[k].text for k in idxs)):
+                        # «Орбита 3, 27а», «Аксай 3 д 20»: a known микрорайон + number → the number is part of the name
+                        self._set(rp, "STREET_NAME", toks, idxs + [q], "fallback_micro_number", 0.65)
+                        rp.flags.append("street_without_type")
+                        rp.flags.append("microdistrict_number_in_name")
+                        if second >= 0 and "HOUSE" not in rp.spans:
+                            self._set(rp, "HOUSE", toks, self._house_idxs(toks, second), "after_street", 0.7)
+                        return
                     self._set(rp, "STREET_NAME", toks, idxs, "fallback_word_number", 0.7)
                     rp.flags.append("street_without_type")
                     if "HOUSE" not in rp.spans:
                         self._set(rp, "HOUSE", toks, self._house_idxs(toks, q), "after_street", 0.75)
                     return
+                q2 = self._next_content(toks, q) if q is not None and toks[q].is_sep else None
+                if q2 is not None and toks[q2].is_number_like and self._free(toks[q2]) \
+                        and "HOUSE" not in rp.spans and not any(t.label is None and t.kind == "WORD" and t.role is None
+                                                                 for t in toks[q2 + 1:]):
+                    q = q2
+                    # «Алматы, Абая, 10, 5»: name, separator, number — and no later word that could be the street
+                    self._set(rp, "STREET_NAME", toks, idxs, "fallback_word_sep_number", 0.6)
+                    rp.flags.append("street_without_type")
+                    self._set(rp, "HOUSE", toks, self._house_idxs(toks, q), "after_street_sep", 0.6)
+                    rp.flags.append("house_without_keyword")
+                    return
                 i = k
                 continue
             i += 1
+
+    def _house_letter(self, rp: RuleParse):
+        """«Абая 10 Б, кв 5» → the lone letter after the house belongs to it (canon drops the space → «10Б»)."""
+        toks = rp.tokens
+        sp = rp.spans.get("HOUSE")
+        if sp is None:
+            return
+        k = next((i for i, t in enumerate(toks) if t.end == sp.end), None)
+        if k is None or toks[k].kind != "NUM" or k + 1 >= len(toks):
+            return
+        n = toks[k + 1]
+        if n.kind == "WORD" and len(n.text) == 1 and n.label is None and n.text.isalpha() \
+                and norm_token(n.text) not in ("к", "п", "д", "э") \
+                and (k + 2 >= len(toks) or toks[k + 2].is_sep or toks[k + 2].kind == "PUNCT" or toks[k + 2].role in
+                     ("apartment_kw", "entrance_kw", "floor_kw", "building_kw")):
+            n.label = "HOUSE"
+            n.role = None
+            sp.end = n.end
+            rp.flags.append("house_letter_spaced")
 
     # ------------------------------------------------------------- pass 8
     def _house_fallback(self, rp: RuleParse):

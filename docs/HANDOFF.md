@@ -34,7 +34,10 @@ Check: Swagger shows the routes; `tests/test_api.py` gets one test per route.
 - review-budget slider: "review the N % least confident" with expected accuracy from
   `GET /api/v1/metrics/dev` once calibration exists;
 - flags filter (multi-select of `flags` values), provenance legend (string / table / gazetteer colors);
-- explain panel v2: show `model_probs` next to rule scores when the model is on;
+- explain panel v2: show `model_probs` next to rule scores when the model is on — `?explain=1` now also returns
+  `tokens[].model_label` / `tokens[].model_prob` (the tagger's BIO label per token) and provenance values like
+  `gazetteer:osm:house` / `string+gazetteer:osm`; `GET /version` reports `model`, `mode`, `gazetteer` and the
+  model's dev metrics for the stats bar;
 - RU/EN strings via a tiny i18n map; README screenshots.
 Check: a new teammate can review 20 records in < 3 minutes without instructions.
 
@@ -44,6 +47,12 @@ Check: a new teammate can review 20 records in < 3 minutes without instructions.
 - README "Run (jury)" section verified on a machine that never built the images.
 
 ## Track B — Kassymzhomart: data + ML (GPU)
+
+**Status (2026-10-18, branch `feat/ml-tagger`):** cold-start ML is done without `train.json`. That covers the OSM gazetteer
+(`make gazetteer`), the grammar synthetic generator, the char-CNN+BiLSTM+CRF tagger (ONNX in `api/artifacts/`), arbiter
+tuning, the JSON calibrator, the A/B evaluator and offline self-training (`make pseudo-label` → `make finetune-real`).
+Details and numbers: [ML.md](ML.md). B1–B4 below still apply once real data is in; the char-CRF path replaces the
+XLM-R steps unless the GPU run beats it on the real dev set.
 
 Code map: `training/` (all scripts), `api/jana_address/ml/onnx_tagger.py` (inference contract),
 `api/jana_address/assembly/arbiter.py` (rules ⊕ model policy), `api/jana_address/confidence/`.

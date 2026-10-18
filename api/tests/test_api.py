@@ -81,3 +81,12 @@ def test_corrections_are_stored(tmp_path, monkeypatch):
         r = c.post("/api/v1/corrections", json={"id": "x", "raw_address": "жуалы 19", "fields": {"street_name": "жуалы", "house": "19"}})
         assert r.status_code == 200 and r.json()["stored"]
         assert (tmp_path / "corrections.jsonl").read_text(encoding="utf-8").count("\n") == 1
+
+
+def test_batch_accepts_single_object_and_plain_strings():
+    """The jury's file format is not fixed: a lone record or a list of strings must not 400."""
+    with TestClient(app) as c:
+        r = c.post("/api/v1/parse/batch", json={"id": "x1", "raw_address": "Кулманова 133"})
+        assert r.status_code == 200 and r.json()[0]["id"] == "x1" and r.json()[0]["house"] == "133"
+        r = c.post("/api/v1/parse/batch", json=["Кулманова 133", "жуалы 19"])
+        assert r.status_code == 200 and [x["id"] for x in r.json()] == ["0", "1"]

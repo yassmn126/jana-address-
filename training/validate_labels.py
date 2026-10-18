@@ -134,12 +134,22 @@ def validate_record(raw: str, f: dict) -> list[dict]:
     return issues
 
 
+def _token_bounds(raw: str) -> tuple[set[int], set[int]]:
+    from jana_address.preprocess import clean
+    from jana_address.tokenizer import tokenize
+    toks = tokenize(clean(raw))
+    return {t.start for t in toks}, {t.end for t in toks}
+
+
 def resolve_spans(raw: str, f: dict) -> tuple[dict[str, tuple[int, int]], list[dict]]:
     """Map string-derived values to (start, end) offsets; prefer non-overlapping, left-to-right.
 
-    Returns (spans, issues). Ambiguity (several possible positions) is a warning."""
+    Candidates that sit on token boundaries win over ones that cut a token («12» inside «112» or
+    «2а» inside «12а» would give the tagger no label at all). Returns (spans, issues). Ambiguity
+    (several possible positions) is a warning."""
     spans: dict[str, tuple[int, int]] = {}
     issues: list[dict] = []
+    starts, ends = _token_bounds(raw)
     # longer values first so «Аксай 3а» claims its text before «3а»-like numbers do
     order = sorted((k for k in STRING_FIELDS if f.get(k)), key=lambda k: -len(str(f[k])))
     taken: list[tuple[int, int]] = []
@@ -151,11 +161,16 @@ def resolve_spans(raw: str, f: dict) -> tuple[dict[str, tuple[int, int]], list[d
         if not free:
             issues.append({"severity": "error", "code": "span_overlap", "field": k, "msg": f"{k} overlaps another field"})
             continue
-        if len(free) > 1:
+        aligned = [c for c in free if c[0] in starts and c[1] in ends]
+        pool = aligned or free
+        if len(pool) > 1:
             issues.append({"severity": "warning", "code": "ambiguous_span", "field": k,
-                           "msg": f"{k}={f[k]!r} occurs {len(free)}× — took the first free occurrence"})
-        spans[k] = free[0]
-        taken.append(free[0])
+                           "msg": f"{k}={f[k]!r} occurs {len(pool)}× — took the first free occurrence"})
+        if not aligned:
+            issues.append({"severity": "warning", "code": "span_not_token_aligned", "field": k,
+                           "msg": f"{k}={f[k]!r} does not start/end on a token boundary"})
+        spans[k] = pool[0]
+        taken.append(pool[0])
     return spans, issues
 
 

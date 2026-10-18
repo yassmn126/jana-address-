@@ -1,111 +1,70 @@
 """Gazetteer enrichment — fills NULL fields only, never overwrites what the string says.
 
-v0 backs onto the YAML seed (places_seed.yaml). The real implementation keeps the same
-interface but queries gazetteer.sqlite built by data_pipeline/ (OSM + KATO):
+Backed by `gazetteer.osm.Gazetteer`: api/artifacts/gazetteer.sqlite (OSM Kazakhstan, built by
+data_pipeline/build_gazetteer.py) with the YAML seed (rules/places_seed.yaml) as fallback.
 
-    class Gazetteer(Protocol):
-        def province_of_city(city) -> str | None
-        def city_of_district(district) -> str | None
-        def district_of_microdistrict(city, name) -> str | None
-        def district_of_street(city, street, house) -> str | None      # house-level, then street-level
-        def street_type_of(city, street) -> str | None
-        def city_ru(kk_name) -> str | None
+Order (ARCHITECTURE.md §3.6):
+  0  Kazakh-spelled city → Russian name («Қарағанды», «Орал» → «Караганда», «Уральск»)  [convention Q2]
+  1  city ← city district («Турксибский район, …» → Алматы)
+  2  province ← city (KATO/OSM hierarchy; republican cities are their own province)
+  3  living_area ← a leftover word chunk that IS a known микрорайон/ЖК of that city (text is in the string)
+  4  district ← микрорайон / ЖК polygon → street + house point (streets crossing districts) →
+               street majority → oblast district (аудан) of a town / village
+  5  street_type ← the street's type in OSM («Кулманова 133» → улица) — not scored, shown at the defense
 
-Provenance strings: 'gazetteer:seed' here, 'gazetteer:osm' / 'gazetteer:kato' later.
+Provenance values: 'string', 'string+table', 'string+gazetteer:osm', 'gazetteer:osm', 'gazetteer:osm:house',
+'gazetteer:osm:street', 'gazetteer:osm:street_majority', 'gazetteer:seed'. The jury sees them with ?explain=1.
 """
 from __future__ import annotations
 
 import re
 
-from ..preprocess import extract, match_view
-from ..rules.grammar import Lexicon, RuleParse, Span, get_lexicon
+from ..preprocess import extract
+from ..rules.grammar import RuleParse, Span, get_lexicon
+from .osm import Gazetteer, get_gazetteer
 
-_BASE_RE = re.compile(r"^(.*?)[\s\-]*\d+[а-яa-zё]?$", re.IGNORECASE)   # «Аксай 3а» → «Аксай», «Самал-2» → «Самал»
-
-
-class SeedGazetteer:
-    def __init__(self, lex: Lexicon | None = None):
-        self.lex = lex or get_lexicon()
-
-    def province_of_city(self, city: str | None) -> str | None:
-        if not city:
-            return None
-        rec = self.lex.city_by_name.get(match_view(city))
-        return rec["province"] if rec else None
-
-    def city_of_district(self, district: str | None) -> str | None:
-        if not district:
-            return None
-        return self.lex.city_of_district.get(match_view(district))
-
-    def district_of_microdistrict(self, city: str | None, name: str | None) -> str | None:
-        if not city or not name:
-            return None
-        rec = self.lex.city_by_name.get(match_view(city))
-        city_ru = rec["name"] if rec else city
-        table = self.lex.microdistricts.get(city_ru) or {}
-        if not table:
-            return None
-        base = name
-        m = _BASE_RE.match(name)
-        if m and m.group(1):
-            base = m.group(1)
-        key = match_view(base)
-        for k, v in table.items():
-            if match_view(k) == key:
-                return v["district"]
-        return None
-
-    def is_microdistrict(self, city: str | None, name: str | None) -> bool:
-        """Known микрорайон / жилой массив / ЖК name for this city (seed; real impl: OSM place=*)."""
-        if not city or not name:
-            return False
-        rec = self.lex.city_by_name.get(match_view(city))
-        city_ru = rec["name"] if rec else city
-        table = self.lex.microdistricts.get(city_ru) or {}
-        base = name
-        m = _BASE_RE.match(name)
-        if m and m.group(1):
-            base = m.group(1)
-        key = match_view(base)
-        return any(match_view(k) == key for k in table)
-
-    def district_of_street(self, city, street, house) -> str | None:  # real impl: OSM house points
-        return None
-
-    def street_type_of(self, city, street) -> str | None:              # real impl: OSM highway name:ru
-        return None
+_KK_LETTERS = re.compile(r"[әғқңөұүһіӘҒҚҢӨҰҮҺІ]")
 
 
-_GZ: SeedGazetteer | None = None
-
-
-def get_gazetteer() -> SeedGazetteer:
-    global _GZ
-    if _GZ is None:
-        _GZ = SeedGazetteer()
-    return _GZ
-
-
-def enrich(fields: dict, prov: dict, rp: RuleParse, gz: SeedGazetteer | None = None) -> None:
-    """Mutates fields/prov in place. Only fills None values."""
+def enrich(fields: dict, prov: dict, rp: RuleParse, gz: Gazetteer | None = None) -> None:
+    """Mutates fields/prov in place. Only fills None values (and maps a Kazakh city spelling, step 0)."""
     gz = gz or get_gazetteer()
-    tag = "gazetteer:seed"
+    conv = get_lexicon().conventions
 
-    if fields["city"] is None:
-        c = gz.city_of_district(fields["district"]) or rp.meta.get("city_of_district")
+    # 0. «Ақтөбе» / «Орал» written → Russian name. The seed already did this inside the parser for big cities.
+    if fields["city"] and prov.get("city") == "string" and conv.get("city_kk_to_ru", True):
+        ru, src = gz.city_ru(fields["city"])
+        # OSM pairs only for a genuinely Kazakh spelling («Ақтөбе», «Қазығұрт»); the seed's curated pairs
+        # («Орал» → «Уральск») also for names without Kazakh letters. «Отеген батыр» is Russian already.
+        if ru and ((src == "gazetteer:osm" and _KK_LETTERS.search(fields["city"]))
+                   or (src != "gazetteer:osm" and (_KK_LETTERS.search(fields["city"]) or ru.lower() != fields["city"].lower()))):
+            fields["city"], prov["city"] = ru, f"string+{src}"
+
+    # 1. city from a city district
+    if fields["city"] is None and fields["district"]:
+        c, src = gz.city_of_district(fields["district"])
+        if c is None and rp.meta.get("city_of_district"):
+            c, src = rp.meta["city_of_district"], "gazetteer:seed"
         if c:
-            fields["city"], prov["city"] = c, tag
-    if fields["province"] is None:
-        p = gz.province_of_city(fields["city"])
+            fields["city"], prov["city"] = c, src
+
+    # 2. province from city (unambiguous only); a typo'd republican city («Алмты») still names its province
+    if fields["province"] is None and fields["city"]:
+        p, src = gz.province_of_city(rp.meta.get("city_known") or fields["city"], kind=rp.meta.get("city_kind"),
+                                     district_hint=fields["district"])
+        if p is None and not gz.settlement(fields["city"]):
+            fz = gz.fuzzy_city(fields["city"])
+            if fz and fz["province"]:
+                p = fz["province"]
+                src = "string+fuzzy" if fz["province"] == fz["name"] else "gazetteer:fuzzy"
+                rp.flags.append("city_fuzzy_match")
         if p:
-            fields["province"], prov["province"] = p, tag
-    # a free word chunk that is a known микрорайон/жилой массив of the city → living_area
-    # («Караганда, Пришахтинск, ул. Ленина 5»). The text IS in the string, so this counts
-    # for the metric: provenance 'string+gazetteer'.
-    if fields["living_area"] is None:
+            fields["province"], prov["province"] = p, src
+
+    # 3. a free word chunk that is a known микрорайон / ЖК of this city → living_area (it is IN the string)
+    if fields["living_area"] is None and fields["city"]:
         for ch in rp.meta.get("leftover_chunks", []):
-            if gz.is_microdistrict(fields["city"], ch["text"]):
+            if len(ch["text"]) >= 4 and gz.is_microdistrict(fields["city"], ch["text"]):
                 fields["living_area"] = extract(rp.raw, ch["start"], ch["end"])
                 prov["living_area"] = "string+gazetteer"
                 rp.spans["LIVING_AREA"] = Span("LIVING_AREA", ch["start"], ch["end"], "gazetteer_chunk", 0.75)
@@ -115,19 +74,29 @@ def enrich(fields: dict, prov: dict, rp: RuleParse, gz: SeedGazetteer | None = N
                         rp.flags.remove("leftover_word")
                 rp.flags.append("living_area_from_gazetteer")
                 break
+
+    # 4. district
     if fields["district"] is None:
-        d = None
-        if fields["street_type"] in ("микрорайон", "квартал", "жилой массив"):
-            d = gz.district_of_microdistrict(fields["city"], fields["street_name"])
+        d, src = None, None
+        if fields["street_type"] in ("микрорайон", "квартал", "жилой массив") and fields["street_name"]:
+            d, src = gz.district_of_microdistrict(fields["city"], fields["street_name"])
         if d is None and fields["living_area"]:
-            d = gz.district_of_microdistrict(fields["city"], fields["living_area"])
-        if d is None:
-            d = gz.district_of_street(fields["city"], fields["street_name"], fields["house"])
+            d, src = gz.district_of_microdistrict(fields["city"], fields["living_area"])
+        if d is None and fields["street_name"]:
+            d, src = gz.district_of_street(fields["city"], fields["street_name"], fields["house"], fields["street_type"])
+        if d is None and rp.meta.get("city_kind") != "city":
+            d, src = gz.rural_district_of(fields["city"], fields["province"])
         if d is None and rp.meta.get("district_from_city"):
-            d = rp.meta["district_from_city"]
+            d, src = rp.meta["district_from_city"], "gazetteer:seed"
         if d:
-            fields["district"], prov["district"] = d, tag
-    if fields["street_type"] is None and fields["street_name"]:
-        t = gz.street_type_of(fields["city"], fields["street_name"])
+            fields["district"], prov["district"] = d, src
+            if src and src.startswith("gazetteer:osm"):
+                rp.flags.append("district_from_osm")
+
+    # 5. street type (not scored; judged at the defense)
+    if fields["street_type"] is None and fields["street_name"] and fields["city"]:
+        t, src = gz.street_type_of(fields["city"], fields["street_name"])
         if t:
-            fields["street_type"], prov["street_type"] = t, tag
+            fields["street_type"], prov["street_type"] = t, src
+    if fields["street_name"] and fields["city"] and gz.con is not None:
+        rp.flags.append("street_in_gazetteer" if gz.street_exists(fields["city"], fields["street_name"]) else "street_not_in_gazetteer")

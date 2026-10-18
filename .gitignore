@@ -16,12 +16,19 @@ data/labels_*.jsonl
 data/corrections.jsonl
 data/dev_gold.json
 data/test_gold.json
-# big artifacts (use LFS or CI)
-api/artifacts/*.onnx
-api/artifacts/*.sqlite
+# artifacts: the small OSM/synthetic-only ones ARE committed (gazetteer.sqlite ~16 MB, model.onnx ~4 MB,
+# model_meta.json, arbiter_policy.json, calibrator.json — docs/ML.md §5). Big / stale ones are not:
 api/artifacts/*.pkl
+api/artifacts/model_fp32.onnx
 api/artifacts/tokenizer.json
+api/artifacts/*-disabled
 # training runs / logs
 runs/
 # secrets
 .env
+
+# OSM extract (225 MB) and local eval outputs
+data/osm/
+out_*.json
+errors_*.md
+data/dataset/

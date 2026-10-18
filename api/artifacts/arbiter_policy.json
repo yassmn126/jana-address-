@@ -1,0 +1,57 @@
+{
+ "tau_solo": 0.7,
+ "tau_field": 0.5,
+ "tau_override": 0.9,
+ "tau_weak": 0.3,
+ "tau_veto": 0.9,
+ "field_tau": {},
+ "_tuned": {
+  "objective": 0.9994,
+  "per_set": {
+   "dev_handmade": 1.0,
+   "conventions_examples": 1.0,
+   "stress_handmade": 1.0,
+   "synth_dev_gold": 0.9934
+  },
+  "default_objective": 0.9991,
+  "gold": [
+   "data/dev_handmade.json",
+   "data/conventions_examples.json",
+   "data/stress_handmade.json",
+   "data/dataset/synth_dev_gold.json:0.3"
+  ],
+  "grid": {
+   "tau_solo": [
+    0.3,
+    0.5,
+    0.7,
+    0.85
+   ],
+   "tau_field": [
+    0.5,
+    0.65,
+    0.8,
+    0.9,
+    0.95
+   ],
+   "tau_override": [
+    0.9,
+    0.95,
+    0.98,
+    1.01
+   ],
+   "tau_weak": [
+    0.3,
+    0.45,
+    0.6,
+    0.75
+   ],
+   "tau_veto": [
+    0.9,
+    0.97,
+    1.01
+   ]
+  },
+  "built": "2026-10-18 05:35"
+ }
+}

@@ -1,7 +1,13 @@
 """parse_one / parse_batch — the single entry point used by the API, the CLI and tests.
 
-Later the ML tagger plugs in here: `candidates = [rules(raw), model(raw)]` → arbiter →
-assemble. For now the rule parser is the only candidate.
+    rules(raw) ─┐
+                ├─ arbiter (assembly/arbiter.py) → assemble/canon → gazetteer enrichment → confidence
+    model(raw) ─┘
+
+Mode (env JANA_MODE or the `mode` argument; eval/ab.py compares them on a gold file):
+  hybrid  rules ⊕ ONNX tagger through the arbiter policy (default when a model artifact exists)
+  rules   rule grammar only
+  model   tagger spans only (rules still supply keyword-derived meta such as the canonical province)
 """
 from __future__ import annotations
 
@@ -10,7 +16,9 @@ import sys
 import time
 from typing import Iterable
 
-from .assembly.arbiter import arbitrate
+import os
+
+from .assembly.arbiter import MODEL_ONLY, arbitrate
 from .assembly.canon import FIELDS, assemble
 from .confidence.heuristic import calibrated_confidence, confidence
 from .gazetteer.enrich import enrich
@@ -27,9 +35,17 @@ def get_parser() -> RuleParser:
     return _PARSER
 
 
+MODE = os.environ.get("JANA_MODE", "hybrid")
+
+
 def components() -> dict:
     """What is actually running (for /version and the pitch)."""
-    return {"rules": "v1", "model": "onnx" if get_tagger().available() else "none", "gazetteer": "seed"}
+    from .gazetteer.osm import get_gazetteer
+    t = get_tagger()
+    gz = get_gazetteer()
+    return {"rules": "v1", "model": t.kind if t.available() else "none", "mode": MODE if t.available() else "rules",
+            "gazetteer": gz.kind, "gazetteer_stats": gz.stats(),
+            "model_metrics": (t.charcrf.meta.get("metrics") if getattr(t, "charcrf", None) else None)}
 
 
 def _empty(id_: str, raw: str) -> dict:
@@ -39,21 +55,28 @@ def _empty(id_: str, raw: str) -> dict:
     return out
 
 
-def parse_one(id_: str, raw: str, explain: bool = False) -> dict:
+def parse_one(id_: str, raw: str, explain: bool = False, mode: str | None = None) -> dict:
     """Never raises: a failure returns nulls with confidence 0.05 (brief: no record may be skipped)."""
     raw = raw if isinstance(raw, str) else ("" if raw is None else str(raw))
+    mode = mode or MODE
     try:
         parser = get_parser()
         rp = parser.parse(raw)
         tagger = get_tagger()
-        if tagger.available():
-            model_spans, _, _ = tagger.tag(rp.tokens)
-            arbitrate(rp, model_spans, parser)
+        if tagger.available() and mode != "rules":
+            model_spans, tok_labels, tok_probs = tagger.tag(rp.tokens)
+            arbitrate(rp, model_spans, parser, policy=MODEL_ONLY if mode == "model" else None,
+                      tok_labels=tok_labels, tok_probs=tok_probs)
+            if explain:
+                rp.meta["model_token_labels"] = tok_labels
+                rp.meta["model_token_probs"] = [round(p, 3) for p in tok_probs]
         fields, prov = assemble(rp)
         enrich(fields, prov, rp)
         conf = calibrated_confidence(rp.flags, fields, rp.meta.get("model_probs"), len(rp.tokens), raw)
         if conf is None:
             conf = confidence(rp.flags, fields)
+        if all(fields.get(k) is None for k in ("street_name", "house", "apartment", "city")):
+            conf = min(conf, 0.08)     # conventions: an unparseable string gets nulls and confidence ≤ 0.1
         out = {"id": id_, "raw_address": raw, **fields, "confidence": conf}
         if explain:
             out["spans"] = [
@@ -68,6 +91,11 @@ def parse_one(id_: str, raw: str, explain: bool = False) -> dict:
             out["provenance"] = prov
             out["field_confidence"] = {s.field.lower(): round(s.score, 3) for s in rp.spans.values()}
             out["model_probs"] = rp.meta.get("model_probs", {})
+            from .gazetteer.osm import get_gazetteer
+            out["geo"] = get_gazetteer().geocode(fields)
+            if "model_token_labels" in rp.meta:
+                for tk, lab, pr in zip(out["tokens"], rp.meta["model_token_labels"], rp.meta["model_token_probs"]):
+                    tk["model_label"], tk["model_prob"] = lab, pr
         return out
     except Exception as e:  # noqa: BLE001 — the batch must survive any single bad record
         out = _empty(id_, raw)
@@ -76,8 +104,8 @@ def parse_one(id_: str, raw: str, explain: bool = False) -> dict:
         return out
 
 
-def parse_batch(records: Iterable[dict], explain: bool = False) -> list[dict]:
-    return [parse_one(str(r.get("id", i)), r.get("raw_address", ""), explain) for i, r in enumerate(records)]
+def parse_batch(records: Iterable[dict], explain: bool = False, mode: str | None = None) -> list[dict]:
+    return [parse_one(str(r.get("id", i)), r.get("raw_address", ""), explain, mode) for i, r in enumerate(records)]
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -8,10 +8,12 @@ Terricon Valley × Jana Post Hackathon 2026, Challenge 01. One line in → 12 fi
   · street_name «Аксай 3а» · house 59 · apartment 70 · confidence 0.91
 ```
 
-**How it works (short):** offset-preserving preprocessing → tokenizer → rule grammar
-(+ ML token tagger, in progress) → arbiter → canonicalization (only `province`, `street_type`
-and number fields are normalized; names are copied *exactly as written*) → gazetteer enrichment
-(fills nulls only, with provenance) → calibrated confidence. Full design: [ARCHITECTURE.md](ARCHITECTURE.md).
+**How it works (short):** offset-preserving preprocessing → tokenizer → rule grammar ⊕
+char-CNN+BiLSTM+CRF tagger (ONNX, trained on 200k addresses generated from OpenStreetMap) → arbiter →
+canonicalization (only `province`, `street_type` and number fields are normalized; names are copied
+*exactly as written*) → OSM gazetteer enrichment (fills nulls only, with provenance; house-level
+districts) → calibrated confidence. Full design: [ARCHITECTURE.md](ARCHITECTURE.md); ML details and
+results: [docs/ML.md](docs/ML.md).
 Labeling rules: [docs/CONVENTIONS.md](docs/CONVENTIONS.md).
 
 ## Run (jury)
@@ -55,12 +57,14 @@ they are never consulted at inference (the brief forbids answer lookup by exact 
 
 ## Develop
 ```bash
-make test        # 100 tests: golden conventions, API contract, ML contract, data-factory round trip
+make test        # 178 tests: golden conventions, API, ML contract, stress rules, robustness, fuzz, geocoding, AI cross-check
 make api-dev     # uvicorn --reload on :8000      (pip install -r api/requirements-dev.txt)
 make web-dev     # vite dev server on :5173, proxies /api
 make eval        # jury-metric replica on a gold file (eval/metric.py)
 make label-dry   # labeling pipeline with the rule parser (no API key)
-make dataset synth train export calibrate eval-dev   # the ML track (training/README.md)
+make ml-cold-start   # OSM gazetteer → synthetic data → tagger → arbiter tuning → calibration (docs/ML.md)
+make ab              # rules vs model vs hybrid on the hand-labeled gold sets (jury metric)
+make pseudo-label finetune-real   # when train.json is in data/
 make speed       # 1000 records through the running API
 make images save-images offline-test
 ```
@@ -69,15 +73,18 @@ Who does what: [docs/HANDOFF.md](docs/HANDOFF.md). Conventions and decisions: [d
 ## Repository
 ```
 api/jana_address/   preprocess.py tokenizer.py rules/{lexicon,province,places_seed,conventions}.yaml rules/grammar.py
-                    ml/onnx_tagger.py assembly/{arbiter,canon}.py gazetteer/enrich.py confidence/{heuristic,features}.py
-                    service.py main.py schemas.py
-api/artifacts/      model.onnx · tokenizer.json · labels.json · calibrator.pkl (built by training/, git-ignored)
+                    ml/{onnx_tagger,charcrf}.py assembly/{arbiter,canon}.py gazetteer/{enrich,osm,names}.py
+                    confidence/{heuristic,features}.py service.py main.py schemas.py
+api/artifacts/      gazetteer.sqlite · model.onnx · model_meta.json · arbiter_policy.json · calibrator.json (api/artifacts/README.md)
+data_pipeline/      build_gazetteer.py (OSM PBF → gazetteer.sqlite)
 api/tests/          test_golden.py · test_api.py · test_ml_contract.py · test_training_pipeline.py
-eval/               metric.py (exact replica of the jury metric + error report) · speed.py
-training/           label_llm.py · validate_labels.py · build_dataset.py · synth.py · train.py · export_onnx.py · calibrate.py
+eval/               metric.py (exact replica of the jury metric + error report) · ab.py (rules/model/hybrid) · speed.py
+training/           synth_grammar.py · train_charcrf.py · tune_arbiter.py · pseudo_label.py · calibrate.py
+                    label_llm.py · validate_labels.py · build_dataset.py · synth.py · train.py/export_onnx.py (XLM-R, GPU)
 web/                React + Vite review UI, nginx proxy
-data/               sample_input.json · sample_output.json · conventions_examples.json   (train.json is git-ignored)
-docs/               CONVENTIONS.md · HANDOFF.md · ARCHITECTURE.md
+data/               sample_input.json · sample_output.json · conventions_examples.json · dev_handmade.json · test_handmade.json
+                    (train.json, labels, corrections, data/osm/, data/dataset/ are git-ignored)
+docs/               CONVENTIONS.md · HANDOFF.md · ML.md · ARCHITECTURE.md
 ```
 
 ## Status
@@ -89,8 +96,13 @@ docs/               CONVENTIONS.md · HANDOFF.md · ARCHITECTURE.md
 | Jury-metric replica + error report + speed check | ✅ |
 | Labeling pipeline (LLM / local vLLM / rules) with validators | ✅ (needs train.json) |
 | Dataset builder, synthetic generator, training/export/calibration scripts | ✅ scripts + round-trip tests (no model trained yet) |
-| ONNX tagger runtime + arbiter (rules ⊕ model) | ✅ wired; activates when `api/artifacts/model.onnx` exists |
-| Gazetteer | 🟡 YAML seed (cities, districts, Almaty/Karaganda microdistricts) — OSM + KATO ETL → sqlite is next |
-| Calibrated confidence | 🟡 heuristic v0 live; `training/calibrate.py` ready |
+| ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses, ONNX 10.5 MB, 0.6 ms/record; jury metric on hand-labeled sets: held-out 99.8, adversarial stress set 100.0 | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
+| Gazetteer: OSM Kazakhstan → sqlite (settlements ru/kk, provinces, city districts, 5.3k микрорайоны/ЖК, 50k streets, house-level districts), seed fallback | ✅ `make gazetteer` |
+| Calibrated confidence (logistic + isotonic, JSON, numpy-only at runtime) | ✅ on synthetic + handmade gold — refit on the real dev set |
+| Geocoding (house → street → микрорайон → district → city point, `?explain=1` / `POST /api/v1/geocode`) + suggest (`GET /api/v1/suggest`) | ✅ 97.4 % of real OSM addresses typed messily resolve to the exact building |
+| Robustness (17 metamorphic transformations), adversarial stress set, experiment history, AI cross-check vs an LLM | ✅ `make robustness`, `make history`, `make verify` — docs/ML.md §2a–2c |
+| Self-training on `train.json` (rules ⊕ model agreement → silver labels + review queue) | ✅ `make pseudo-label` → `make finetune-real` |
 
 Secrets, personal data and `train.json` are never committed (see `.gitignore`).
+
+Gazetteer data © OpenStreetMap contributors, available under the Open Database License (ODbL).

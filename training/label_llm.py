@@ -3,7 +3,7 @@
 Usage:
     export ANTHROPIC_API_KEY=...
     python -m training.label_llm --input data/train.json --output data/labels_llm.jsonl \
-        --model claude-sonnet-5-5 --batch-size 20 [--limit 200] [--resume]
+        --model claude-opus-5-5 --batch-size 20 [--limit 200] [--resume]
 
     # no API key? dry run with the rule parser as the "labeler" (tests the pipeline end-to-end):
     python -m training.label_llm --input data/train.json --output data/labels_rules.jsonl --provider rules
@@ -11,7 +11,7 @@ Usage:
 Each output line:
     {"id", "raw_address", "fields": {...11 fields...}, "spans": {"street_name": [s, e], ...},
      "rules_fields": {...}, "disagreements": ["house", ...], "issues": [...], "needs_review": bool,
-     "labeler": "claude-sonnet-5-5", "notes": "..."}
+     "labeler": "claude-opus-5-5", "notes": "..."}
 
 Review priority (what the UI sorts by): issues with severity=error → disagreements with the rule
 parser → warnings → the rest (sample 10% for QA).
@@ -21,8 +21,8 @@ hackathon. Ask the organizers before sending train strings to an external API; t
 alternative is a local model (Qwen2.5-32B-Instruct via vLLM on the university GPU) behind the same
 OpenAI-compatible interface — see `--provider openai-compatible`.
 
-Model IDs / pricing: https://platform.claude.com/docs/en/models/overview  (Sonnet 5.5: $2/$10 per MTok;
-Haiku 5.5 from $0.10/$0.50). Structured outputs: https://platform.claude.com/docs/en/build-with-claude/structured-outputs
+Model IDs / pricing: https://platform.claude.com/docs/en/models/overview  (Opus 5.5: $4/$20 per MTok, the default;
+pass --model to choose another). Effort: env JANA_LLM_EFFORT (default medium). Structured outputs: https://platform.claude.com/docs/en/build-with-claude/structured-outputs
 """
 from __future__ import annotations
 
@@ -71,28 +71,43 @@ def user_message(batch: list[dict]) -> str:
 
 
 # ----------------------------------------------------------------------------- providers
+DEFAULT_MODEL = "claude-opus-5-5"
+EFFORT = os.environ.get("JANA_LLM_EFFORT", "medium")      # Opus 5.5 defaults to medium; set explicitly, «high» for hard sets
+
+
+class LLMRefusal(RuntimeError):
+    """The model (and its server-side fallback) declined the batch; the caller marks those records for review."""
+
+
 def label_with_anthropic(batch: list[dict], system: str, model: str, usage: dict) -> list[dict]:
+    """Claude API, structured JSON output. The SDK retries 429 / 5xx / connection errors itself (max_retries);
+    a 400 is a bug in the request and is raised immediately. Large stable system prompt → prompt caching."""
     import anthropic  # lazy import: not needed for --provider rules
 
-    client = anthropic.Anthropic()
-    for attempt in range(5):
-        try:
-            resp = client.messages.create(
-                model=model,
-                max_tokens=8000,
-                system=system,
-                messages=[{"role": "user", "content": user_message(batch)}],
-                output_config={"format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
-            )
-            usage["input"] += resp.usage.input_tokens
-            usage["output"] += resp.usage.output_tokens
-            text = next(b.text for b in resp.content if b.type == "text")
-            return json.loads(text)["records"]
-        except Exception as e:  # noqa: BLE001
-            wait = 2 ** attempt
-            print(f"  retry {attempt+1}/5 after error: {type(e).__name__}: {e} (sleep {wait}s)", file=sys.stderr)
-            time.sleep(wait)
-    raise RuntimeError("anthropic: giving up on this batch")
+    client = anthropic.Anthropic(max_retries=6)
+    resp = client.beta.messages.create(
+        model=model,
+        max_tokens=16000,
+        system=system,
+        messages=[{"role": "user", "content": user_message(batch)}],
+        output_config={"format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}, "effort": EFFORT},
+        cache_control={"type": "ephemeral"},
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
+    )
+    usage["input"] += resp.usage.input_tokens
+    usage["output"] += resp.usage.output_tokens
+    usage["cache_read"] = usage.get("cache_read", 0) + (resp.usage.cache_read_input_tokens or 0)
+    if resp.stop_reason == "refusal":
+        category = resp.stop_details.category if resp.stop_details else None
+        raise LLMRefusal(f"refusal ({category}) for batch starting {batch[0]['id']}")
+    if resp.stop_reason == "max_tokens":
+        if len(batch) == 1:
+            raise RuntimeError(f"max_tokens on a single record {batch[0]['id']}")
+        half = len(batch) // 2                       # output did not fit: split and retry
+        return label_with_anthropic(batch[:half], system, model, usage) + label_with_anthropic(batch[half:], system, model, usage)
+    text = next(b.text for b in resp.content if b.type == "text")
+    return json.loads(text)["records"]
 
 
 def label_with_openai_compatible(batch: list[dict], system: str, model: str, usage: dict) -> list[dict]:
@@ -111,13 +126,15 @@ def label_with_openai_compatible(batch: list[dict], system: str, model: str, usa
     return json.loads(resp.choices[0].message.content)["records"]
 
 
-STRING_PROVENANCE = {"string", "string+table", "string+gazetteer"}
+def from_string(provenance: str | None) -> bool:
+    """'string', 'string+table', 'string+gazetteer[:osm|:seed]' are labels; pure 'gazetteer:*' fills are not."""
+    return bool(provenance) and provenance.startswith("string")
 
 
-def rules_string_fields(id_: str, raw: str) -> dict:
-    """Rule-parser fields that come from the STRING (gazetteer-filled fields are not labels)."""
-    p = parse_one(id_, raw, explain=True)
-    return {f: (p[f] if (p["provenance"].get(f) in STRING_PROVENANCE) else None) for f in FIELDS}
+def rules_string_fields(id_: str, raw: str, mode: str = "rules") -> dict:
+    """Parser fields that come from the STRING (gazetteer-filled fields are not labels)."""
+    p = parse_one(id_, raw, explain=True, mode=mode)
+    return {f: (p[f] if from_string(p["provenance"].get(f)) else None) for f in FIELDS}
 
 
 def label_with_rules(batch: list[dict], system: str, model: str, usage: dict) -> list[dict]:
@@ -133,7 +150,7 @@ def main(argv=None) -> int:
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", required=True)
     ap.add_argument("--provider", choices=PROVIDERS, default="anthropic")
-    ap.add_argument("--model", default="claude-sonnet-5-5")
+    ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--batch-size", type=int, default=20)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--resume", action="store_true", help="skip ids already present in --output")

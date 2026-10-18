@@ -52,10 +52,14 @@ def version() -> dict:
 def _to_records(payload: Any) -> list[dict]:
     if isinstance(payload, dict) and "records" in payload:
         payload = payload["records"]
+    elif isinstance(payload, dict) and "raw_address" in payload:
+        payload = [payload]                       # a single record is a batch of one
     if not isinstance(payload, list):
         raise HTTPException(400, "Body must be a JSON array of {id, raw_address} or {\"records\": [...]}")
     recs = []
     for i, r in enumerate(payload):
+        if isinstance(r, str):
+            r = {"id": str(i), "raw_address": r}  # a plain list of address strings
         if not isinstance(r, dict):
             raise HTTPException(400, f"record #{i} is not an object")
         recs.append({"id": str(r.get("id", i)), "raw_address": r.get("raw_address", "") or ""})
@@ -136,6 +140,57 @@ def add_correction(c: Correction) -> dict:
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps({**c.model_dump(), "ts": time.time()}, ensure_ascii=False) + "\n")
     return {"stored": True, "path": str(path)}
+
+
+@app.get("/api/v1/suggest")
+def suggest(q: str = Query(..., min_length=2, description="what the user has typed so far"),
+            city: str | None = Query(None, description="restrict to streets / микрорайоны of this settlement"),
+            limit: int = Query(10, ge=1, le=50)) -> list[dict]:
+    """Autocomplete from the OSM gazetteer: settlements (no city) or streets + микрорайоны/ЖК of a city."""
+    from .gazetteer.osm import get_gazetteer
+    return get_gazetteer().suggest(q, city, limit)
+
+
+@app.post("/api/v1/geocode", response_model=None)
+def geocode(record: RecordIn) -> dict:
+    """Parse one address and return its point: {lat, lon, precision} (house → street → microdistrict → district → locality)."""
+    out = parse_one(record.id, record.raw_address, explain=True)
+    return {"id": record.id, "raw_address": record.raw_address,
+            "fields": {k: out[k] for k in RecordOut.model_fields if k not in ("id", "raw_address")}, "geo": out.get("geo")}
+
+
+@app.post("/api/v1/verify", response_model=None)
+def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
+                    model: str = Query("claude-opus-5-5")):
+    """AI cross-check (dev / ops tool, never part of parsing): our parse vs an LLM labeler, field-by-field diff.
+
+    Works where the repository's eval/ and training/ are available (`make api-dev`) and a provider is configured
+    (ANTHROPIC_API_KEY / `ant auth login` for `anthropic`, OPENAI_BASE_URL for a local vLLM). The offline jury image
+    returns 503. At most 50 records per call. Disagreements are for a human to decide (eval/llm_verify.py → review.html)."""
+    import sys
+    root = Path(__file__).resolve().parents[2]
+    if not (root / "eval" / "llm_verify.py").exists():
+        raise HTTPException(503, "verification tooling is not part of this image (run from the repository: make api-dev)")
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    if len(records) > 50:
+        raise HTTPException(413, "at most 50 records per verify call (use eval/llm_verify.py for files)")
+    try:
+        from eval.llm_verify import run
+    except ImportError as e:
+        raise HTTPException(503, f"verification dependencies missing: {e}") from e
+    if provider == "anthropic":
+        try:
+            import anthropic  # noqa: F401
+        except ImportError as e:
+            raise HTTPException(503, "pip install anthropic (api/requirements-dev.txt)") from e
+    recs = [{"id": r.id, "raw_address": r.raw_address} for r in records]
+    try:
+        result = run(recs, {}, provider, model, batch_size=20)
+    except Exception as e:  # noqa: BLE001 — surface provider / credential errors as 502, never crash the API
+        raise HTTPException(502, f"{provider} failed: {type(e).__name__}: {e}") from e
+    return {"summary": result["summary"],
+            "records": [{k: r[k] for k in ("id", "raw_address", "ours", "llm", "disagreements", "issues")} for r in result["rows"]]}
 
 
 @app.exception_handler(Exception)

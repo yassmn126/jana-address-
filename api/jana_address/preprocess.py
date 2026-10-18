@@ -52,8 +52,8 @@ def extract(raw: str, start: int, end: int) -> str | None:
     """Cut `raw[start:end]`, remove invisible chars, collapse whitespace."""
     if start is None or end is None or start >= end:
         return None
-    piece = "".join(ch for ch in raw[start:end] if ch not in INVISIBLE
-                    and unicodedata.category(ch) not in ("Cc", "Cf"))
+    piece = "".join(" " if ch in SPACES else ch for ch in raw[start:end]
+                    if ch in SPACES or (ch not in INVISIBLE and unicodedata.category(ch) not in ("Cc", "Cf")))
     piece = _WS.sub(" ", piece.replace(" ", " ")).strip()
     return piece or None
 
