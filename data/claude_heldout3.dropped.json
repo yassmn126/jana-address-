@@ -1,0 +1,21 @@
+[
+ {
+  "raw_address": "Актау 27мкр 15дом 2корпус кв 40",
+  "fields": {
+   "province": null,
+   "city": "Актау",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "27",
+   "house": "15/2",
+   "apartment": "40",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ }
+]

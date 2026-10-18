@@ -16,10 +16,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-LETTERS = "A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі"
+LETTERS = "A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі" + "ÄäĞğİıÑñÖöŞşŪūÜüÇçÁáÉéÍíÓóÚúÝýǴǵŃńŊŋ"   # + Kazakh Latin (2018/2021)
 _LET = f"[{LETTERS}]"
 _TOKEN_RE = re.compile(
-    rf"(?P<word>(?<![0-9]){_LET}+(?:-(?:{_LET}|[0-9])+)*|{_LET}+)"   # letters, hyphen-joined chunks (not after a digit: «52а-18»)
+    rf"(?P<word>(?<![0-9]){_LET}+(?:-(?:{_LET}+|[0-9]+{_LET}?(?![0-9])))*|{_LET}+)"   # «Самал-2», «Аксай-3а», «Нур-Султан»;
+    # a chunk is letters OR digits(+one letter), so «Бухар-Жырау55» is the street «Бухар-Жырау» + «55» (not after a digit: «52а-18»)
     rf"|(?P<num>[0-9]+)"
     rf"|(?P<punct>[^\s])"
 )
@@ -38,11 +39,11 @@ class Token:
 
     @property
     def is_sep(self) -> bool:
-        return self.kind == "PUNCT" and self.text in {",", ";", "|"}
+        return (self.kind == "PUNCT" and self.text in {",", ";", "|"}) or bool(self.meta.get("sep"))   # «—»/«/» styles: grammar._separators
 
     @property
     def is_slash(self) -> bool:
-        return self.kind == "PUNCT" and self.text == "/"
+        return self.kind == "PUNCT" and self.text == "/" and not self.meta.get("sep")   # «Актау/14 мкр/59/12»: a separator
 
     @property
     def is_number_like(self) -> bool:

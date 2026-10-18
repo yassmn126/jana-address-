@@ -33,18 +33,23 @@ region and dozens of villages, so province stays null unless the string or the d
 
 ## 2. Results
 
-Jury-metric replica (`eval/metric.py`, strict), `make ab`. Model = **v4b** char-CRF: 220k synthetic rows × 6 epochs
-(41 min on an M4 CPU), then warm-started on 60k rows from the newer generator × 2 epochs (3 min). Rules = the grammar after
-the stress-set fixes (§2a).
+Jury-metric replica (`eval/metric.py`, strict), `make ab`. Model = **v6** char-CRF: 220k synthetic rows × 6 epochs
+(41 min on an M4 CPU), warm-started on 60k rows from the newer generator (v4b), then on 120k rows whose Latin mode writes
+addresses the way the independent benchmark showed customers type them (v6, 3 epochs, 9 min). Rules = the grammar after the
+stress-set (§2a) and independent-benchmark ([BENCHMARK.md](BENCHMARK.md)) fixes.
 
 | gold set | n | rules | model only | **hybrid** | all-4-address-fields per record (hybrid) |
 |---|---|---|---|---|---|
-| `test_handmade` — held out (see note) | 89 | 100.00 | 99.81 | **100.00** | 100 % |
-| `stress_handmade` — adversarial (§2a) | 106 | 97.66 | 99.75 | **100.00** | 100 % |
+| **independent benchmark — written & labeled by Claude Opus 5.5** ([BENCHMARK.md](BENCHMARK.md)) | 526 | 97.41 | 98.85 | **99.47** (97.08 on first contact) | 99.8 % |
+| **untouched held-out — second Claude set, measured once** ([BENCHMARK.md](BENCHMARK.md)) | 263 | 97.19 | 98.83 | **99.33** (main: 96.30) | 98.5 % |
+| **adversarial HARD set #4** — 16 themes of what breaks parsers, fixed against ([BENCHMARK.md](BENCHMARK.md)) | 217 | 89.30 | 90.10 | **98.92** (first contact 91.66, main 85.69) | 97.7 % |
+| **adversarial HARD set #5 — untouched, measured once after everything** | 190 | 94.54 | 94.10 | **96.47** (main 83.51, PR #3 head 90.42) | 87.4 % |
+| `test_handmade` — held out (see note) | 89 | 100.00 | 100.00 | **100.00** | 100 % |
+| `stress_handmade` — adversarial (§2a) | 106 | 97.66 | 99.85 | **100.00** | 100 % |
 | `dev_handmade` | 139 | 100.00 | 100.00 | **100.00** | 100 % |
 | `conventions_examples` | 42 | 100.00 | 100.00 | **100.00** | 100 % |
-| `rural_handmade` — villages, district centres, Kazakh village strings, post pickups | 40 | 98.86 | 99.25 | **100.00** | 100 % |
-| synthetic dev (other seed, in-distribution) | 5 000 | 92.41 | 99.45 | **99.39** | 97.5 % |
+| `rural_handmade` — villages, district centres, Kazakh village strings, post pickups | 40 | 98.86 | 100.00 | **100.00** | 100 % |
+| synthetic dev (other seed, in-distribution) | 5 000 | 92.20 | 99.46 | **99.41** | 97.7 % |
 
 Numbers as of the last `make ab` (the full history is in [EXPERIMENTS.md](EXPERIMENTS.md)). **Note on the held-out set:** its last
 error («Байконыр» → «Байконур») was fixed after the Claude cross-check (§2b) ran over all demo sets, including this one: Claude and the
@@ -156,6 +161,17 @@ make history                # experiment table → docs/EXPERIMENTS.md
 `JANA_GAZETTEER=seed` disables OSM, `JANA_CALIBRATOR=off` falls back to the heuristic confidence. `GET /version` shows what is loaded.
 
 ## 4. When `train.json` arrives (day 0)
+
+**One command:** `make day0` (`python -m training.day0 --input data/train.json`). It writes everything to `runs/day0/`:
+`labels_pseudo.jsonl` → `labels_day0.jsonl` (agreement = verified, rest = review) → `dataset/` (its own frozen dev split,
+separate from the synthetic `data/dataset/`) → warm-start fine-tune → arbiter re-tune → calibration on the real dev → A/B
+logged to `eval/history.jsonl`. The previous artifacts are copied to `runs/day0/artifacts_before/` first, so rolling back
+means copying 4 files. `make day0-claude` adds Claude as an independent second labeler: agreement of two different labelers
+becomes gold, and every disagreement lands in `runs/day0/review.html` (pick ours / Claude / type, export
+`corrections.jsonl` to `data/`, re-run). Only with the organizers' OK to send `train.json` out; otherwise point
+`--provider openai-compatible` at a local vLLM on the university GPU. `--limit 200 --skip-train` is a 1-minute dry run.
+
+The same steps by hand:
 
 1. `make pseudo-label`. Offline: silver labels where rules ⊕ model agree, plus a review queue of the disagreements.
    The LLM labeler (`make label`, or local vLLM on the university GPU) is a second opinion for the queue.

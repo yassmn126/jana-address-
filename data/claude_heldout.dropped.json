@@ -1,0 +1,21 @@
+[
+ {
+  "raw_address": "Тараз, ул. Сулейменова 5 литер А, кв 2",
+  "fields": {
+   "province": null,
+   "city": "Тараз",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Сулейменова",
+   "house": "5/А",
+   "apartment": "2",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ }
+]

@@ -23,18 +23,27 @@ SPACES = {" ", " ", " ", " ", " ", " ", " ", " ",
           " ", " ", " ", "　", "\t", "\r", "\n", "\x0b", "\x0c"}
 
 # Latin lookalikes → Cyrillic, used ONLY in the matching view (never in output).
-HOMOGLYPHS = str.maketrans({
+_LAT2CYR = {
     "a": "а", "e": "е", "o": "о", "p": "р", "c": "с", "x": "х", "y": "у", "k": "к",
     "m": "м", "t": "т", "b": "в", "h": "н", "i": "і",
     "A": "А", "E": "Е", "O": "О", "P": "Р", "C": "С", "X": "Х", "Y": "У", "K": "К",
     "M": "М", "T": "Т", "B": "В", "H": "Н", "I": "І",
-})
+}
+HOMOGLYPHS = str.maketrans(_LAT2CYR)
+_CYR2LAT = str.maketrans({v: k for k, v in _LAT2CYR.items()})
+# Kazakh Latin (2021) and other diacritics → plain ASCII, so «daŋğyly», «köşesi», «päter» hit the lexicon
+_LAT_DIACRITICS = str.maketrans({"ŋ": "n", "ñ": "n", "ğ": "g", "ş": "sh", "ä": "a", "ö": "o", "ü": "u", "ı": "i", "ū": "u",
+                                 "ç": "ch", "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ý": "y", "ǵ": "g", "ń": "n"})
 
 _WS = re.compile(r"\s+")
 
 
+_ESCAPES = re.compile(r"\\(?:u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[ntr])")   # literal «\u00a0», «\n» from broken exports
+
+
 def clean(raw: str) -> str:
-    """Same-length copy of `raw` with invisible chars and exotic spaces → ' '."""
+    """Same-length copy of `raw` with invisible chars, exotic spaces and literal escape sequences → ' '."""
+    raw = _ESCAPES.sub(lambda m: " " * len(m.group(0)), raw)
     out = []
     for ch in raw:
         if ch in INVISIBLE or ch in SPACES:
@@ -64,7 +73,7 @@ def match_view(text: str) -> str:
     lowercase, ё→е, Latin lookalikes → Cyrillic, dots/quotes removed,
     hyphens kept (they are meaningful in 'Самал-2'), whitespace collapsed.
     """
-    t = text.lower().replace("ё", "е")
+    t = text.lower().replace("ё", "е").translate(_LAT_DIACRITICS)
     t = t.translate(HOMOGLYPHS)
     t = re.sub(r"[.\"'«»`’]", "", t)
     t = _WS.sub(" ", t).strip()
@@ -72,6 +81,11 @@ def match_view(text: str) -> str:
 
 
 def norm_token(text: str) -> str:
-    """Normalize a single token for lexicon lookup (keeps Latin for Latin keywords)."""
-    t = text.lower().replace("ё", "е").strip(".")
+    """Normalize a single token for lexicon lookup (keeps Latin for Latin keywords).
+    Latin diacritics are folded; a token mixing scripts («аvenue», «Aлматы») is folded to its majority script."""
+    t = text.lower().replace("ё", "е").strip(".").translate(_LAT_DIACRITICS)
+    lat = sum(1 for ch in t if ch.isascii() and ch.isalpha())
+    cyr = sum(1 for ch in t if "а" <= ch <= "я" or ch in "әғқңөұүһі")
+    if lat and cyr:
+        t = t.translate(_CYR2LAT) if lat >= cyr else t.translate(HOMOGLYPHS)
     return t

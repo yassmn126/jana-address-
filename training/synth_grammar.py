@@ -78,6 +78,28 @@ KW_KK = {
     "entrance": [("кіреберіс", 30), ("подъезд", 10)],
     "floor": [("қабат", 30), ("этаж", 6)],
 }
+# Latin / transliterated keywords as customers type them («Almaty qalasy», «Turan avenue», «8 etazh», «ZhK Highvill»)
+KW_LAT = {
+    "city_before": [("g.", 20), ("g", 5), ("city", 3), ("gorod", 2)],
+    "city_after": [("qalasy", 10), ("kalasy", 4), ("city", 6)],
+    "village_before": [("s.", 15), ("selo", 6), ("pos.", 8), ("aul", 5)],
+    "village_after": [("auyly", 8), ("auly", 2)],
+    "district_after": [("district", 20), ("rayon", 15), ("audany", 8), ("raion", 3)],
+    "district_before": [("district", 4), ("rayon", 4)],
+    "province_after": [("obl", 15), ("obl.", 10), ("oblast", 15), ("oblysy", 5), ("region", 10)],
+    "street_after": {"улица": [("st", 20), ("st.", 15), ("str", 10), ("street", 20), ("str.", 5), ("koshesi", 10), ("kosh.", 2)],
+                     "проспект": [("avenue", 20), ("ave", 15), ("ave.", 5), ("dangyly", 15), ("prospekt", 5)],
+                     "переулок": [("lane", 5)], "бульвар": [("blvd", 5), ("boulevard", 3)]},
+    "micro_before": [("mkr", 20), ("mkr.", 10), ("microdistrict", 4)],
+    "micro_after": [("mkr", 20), ("microdistrict", 10), ("shagyn audany", 8), ("mikrorayon", 4)],
+    "house": [("dom", 20), ("d.", 15), ("d", 5), ("house", 6), ("building", 6), ("bldg", 2), ("uy", 6)],
+    "apartment": [("kv", 30), ("kv.", 15), ("flat", 15), ("apt", 12), ("apt.", 5), ("pater", 6), ("office", 3)],
+    "entrance": [("podezd", 15), ("podyezd", 8), ("pod.", 6), ("entrance", 10), ("kireberis", 4)],
+    "floor": [("floor", 20), ("fl.", 6), ("etazh", 15), ("etaj", 4), ("qabat", 4), ("kabat", 2)],
+    "living_kw": [("ZhK", 20), ("zhk", 6), ("JK", 4)],
+    "landmark_marker": [("near", 10), ("opposite", 4), ("behind", 2)],
+    "building": [" korpus ", " korp. ", ", block ", " block "],
+}
 STREET_KW_BEFORE = {
     "улица": [("ул.", 50), ("ул", 25), ("улица", 18), ("ул .", 2), ("Ул.", 5), ("УЛ.", 1), ("ul.", 2), ("ul", 1), ("у.", 1)],
     "проспект": [("пр.", 25), ("пр-т", 20), ("проспект", 20), ("просп.", 6), ("пр", 6), ("пр-кт", 3), ("prospekt", 1), ("ave", 1)],
@@ -316,7 +338,7 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         r.add(rnd.choice(JUNK))
         return r
     kk = rnd.random() < 0.15                     # Kazakh keywords and word order
-    latin = (not kk) and rnd.random() < 0.05
+    latin = (not kk) and rnd.random() < 0.08
     style = {"sep": wpick(rnd, [(", ", 70), (" ", 18), (",", 10), (". ", 2)])}
     r = Rec(rnd, style)
     g = r.gold
@@ -330,7 +352,10 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         if prov is None or prov.get("city"):
             return False
         x = rnd.random()
-        if kk and prov.get("kk"):
+        lat_stem = next((v[: -len(" region")] for v in prov["variants"] if v.endswith(" region")), None)
+        if latin and lat_stem:
+            r.add(lat_stem.title(), "province"); r.sp(); r.add(wpick(rnd, KW_LAT["province_after"]), "province")
+        elif kk and prov.get("kk"):
             name = prov["kk"].replace(" облысы", "")
             r.add(name, "province")
             r.sp()
@@ -360,7 +385,15 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         written = name
         if kk and city.get("kk") and rnd.random() < 0.7:
             written = city["kk"]
-        if is_village and not latin:
+        if latin and rnd.random() < 0.55:
+            before, after = ((KW_LAT["village_before"], KW_LAT["village_after"]) if is_village
+                             else (KW_LAT["city_before"], KW_LAT["city_after"]))
+            if rnd.random() < 0.55:
+                kw = wpick(rnd, before)
+                r.add(kw); r.add("" if kw.endswith(".") and rnd.random() < 0.3 else " "); r.add(written, "city")
+            else:
+                r.add(written, "city"); r.sp(); r.add(wpick(rnd, after))
+        elif is_village and not latin:
             if kk and rnd.random() < 0.6:
                 r.add(written, "city"); r.sp(); r.add(wpick(rnd, KW_KK["village_suffix"]))
             else:
@@ -410,7 +443,13 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             name = rural
         else:
             return False
-        if kk:
+        if latin:
+            name = translit(name)
+            if rnd.random() < 0.8:
+                r.add(name, "district"); r.sp(); r.add(wpick(rnd, KW_LAT["district_after"]))
+            else:
+                r.add(wpick(rnd, KW_LAT["district_before"])); r.sp(); r.add(name, "district")
+        elif kk:
             r.add(name, "district"); r.sp(); r.add(wpick(rnd, KW_KK["district_after"]))
         else:
             adjective = name.endswith(("ский", "ской", "кий", "цкий"))
@@ -436,7 +475,11 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         base = l["base"]
         if rnd.random() < 0.3 and not re.search(r"\d", base):
             base = f"{base}{rnd.choice(['-', ' ', '-'])}{rnd.randint(1, 12)}"
-        if kk and l["kind"] == "ЖК" and rnd.random() < 0.6:
+        if latin:
+            base = translit(base)
+            r.add(wpick(rnd, KW_LAT["living_kw"]) if l["kind"] == "ЖК" else wpick(rnd, KW_LAT["micro_before"])); r.sp()
+            r.add(base, "living_area")
+        elif kk and l["kind"] == "ЖК" and rnd.random() < 0.6:
             r.add(base, "living_area"); r.sp(); r.add("тұрғын үй кешені")
         elif kk and l["kind"] in ("микрорайон", "") and rnd.random() < 0.5:
             r.add(base, "living_area"); r.sp(); r.add(wpick(rnd, KW_KK["micro_after"]))
@@ -471,7 +514,9 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         lemma = typ
         if typ is None and x < 0.6:
             lemma = "улица" if rnd.random() < 0.85 else None    # OSM has no type → most often «ул.»
-        if lemma and kk and lemma in KW_KK["street_after"] and rnd.random() < 0.85:
+        if lemma and latin and lemma in KW_LAT["street_after"] and rnd.random() < 0.45:
+            r.add(base, "street_name"); r.sp(); r.add(wpick(rnd, KW_LAT["street_after"][lemma]), "street_type")
+        elif lemma and kk and lemma in KW_KK["street_after"] and rnd.random() < 0.85:
             r.add(base, "street_name"); r.sp(); r.add(wpick(rnd, KW_KK["street_after"][lemma]), "street_type")
         elif lemma and x < 0.92 and lemma in STREET_KW_BEFORE and rnd.random() < 0.88:
             kw = wpick(rnd, STREET_KW_BEFORE[lemma])
@@ -530,22 +575,22 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             kw = wpick(rnd, KW_KK["micro_after"])
             r.add(kw, "street_type")
         elif x < 0.55:
-            kw = wpick(rnd, STREET_KW_BEFORE[lemma])
+            kw = wpick(rnd, KW_LAT["micro_before"]) if latin and lemma == "микрорайон" else wpick(rnd, STREET_KW_BEFORE[lemma])
             glue = use_num and rnd.random() < 0.15
             r.add(kw, "street_type")
             r.add("" if glue or (kw.endswith(".") and rnd.random() < 0.4) else " ")
             r.add(name, "street_name")
         else:
             r.add(name, "street_name")
-            r.add("" if use_num and rnd.random() < 0.3 else " ")
-            r.add(wpick(rnd, STREET_KW_AFTER[lemma]), "street_type")
+            r.add("" if use_num and rnd.random() < 0.3 and not latin else " ")
+            r.add(wpick(rnd, KW_LAT["micro_after"] if latin and lemma == "микрорайон" else STREET_KW_AFTER[lemma]), "street_type")
         g["street_type"], g["street_name"] = lemma, name
         return True       # house_block separates the house by a comma or keyword (convention rule 2)
 
     # ---- house and details
     def house_block(after_street: bool):
         h = gen_house(p, rnd)
-        hk = KW_KK["house"] if kk else KW["house"]
+        hk = KW_KK["house"] if kk else (KW_LAT["house"] if latin else KW["house"])
         x = rnd.random()
         name_has_num = bool(g["street_name"] and re.search(r"\d", g["street_name"]))
         if micro_mode or name_has_num:
@@ -563,7 +608,7 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
         g["house"] = h
         if rnd.random() < 0.025:
             k = str(rnd.randint(1, 5)) if rnd.random() < 0.7 else rnd.choice("АБВ")
-            r.add(rnd.choice([" корпус ", " корп. ", ", блок ", " блок "]) + k)
+            r.add(rnd.choice(KW_LAT["building"] if latin else [" корпус ", " корп. ", ", блок ", " блок "]) + k)
             r.house_join = f"/{k}"
         return True
 
@@ -594,14 +639,15 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
                 n += rnd.choice("аб")
             kwset = (KW_KK if kk else KW)[f]
             kw = wpick(rnd, kwset)
-            if latin and f == "apartment":
-                kw = rnd.choice(["kv", "kv.", "flat", "apt"])
-            if latin and f == "floor":
-                kw = rnd.choice(["floor", "fl.", "этаж"])
+            if latin:
+                kw = wpick(rnd, KW_LAT[f])
             if rnd.random() < 0.03 and f == "entrance":
                 kw = rnd.choice(KW_TYPOS["подъезд"])
             p_kw_first = kw_first if kw_first is not None else (0.25 if num_first_style else 0.8)
-            if kk and rnd.random() < 0.3 and f in ("floor", "entrance"):
+            if latin and f == "floor" and rnd.random() < 0.2:
+                r.sepn(); r.add(n, f); r.add({"1": "st", "2": "nd", "3": "rd"}.get(n[-1:] if n[-2:-1] != "1" else "", "th"))
+                r.add(" floor")                                                  # «5th floor»
+            elif kk and rnd.random() < 0.3 and f in ("floor", "entrance"):
                 r.sepn(); r.add(n, f); r.add(rnd.choice(["-ші ", "-шы ", "-інші "])); r.add(kw)
             elif not kk and f in ("floor", "entrance") and rnd.random() < 0.06:
                 # «2й подъезд», «4-й этаж»: the glued ordinal is one token with the number; gold strips it
@@ -637,7 +683,7 @@ def build_record(p: Pools, rnd: random.Random) -> Rec:
             text = text.lower()
         r.sepn()
         if rnd.random() < 0.3:
-            r.add(wpick(rnd, KW["landmark_marker"])); r.sp()
+            r.add(wpick(rnd, KW_LAT["landmark_marker"] if latin else KW["landmark_marker"])); r.sp()
         r.add(text, "landmark")
         g["landmark"] = text
 

@@ -39,8 +39,8 @@ def _number(v: str | None) -> str | None:
     return v or None
 
 
-_CITY_PREFIX = re.compile(r"^(?:г|гор|город|пос|п|пгт|с|село|аул|ауыл|ст|станция)\.?\s+", re.IGNORECASE)
-_CITY_SUFFIX = re.compile(r"\s+(?:қаласы|каласы|ауылы|кенті|кенти|қ|г)\.?$", re.IGNORECASE)
+_CITY_PREFIX = re.compile(r"^(?:г|гор|город|пос|п|пгт|с|село|аул|ауыл|ст|станция|g|gorod|city|selo|pos)\.?\s+", re.IGNORECASE)
+_CITY_SUFFIX = re.compile(r"\s+(?:қаласы|каласы|ауылы|кенті|кенти|қ|г|qalasy|kalasy|auyly|city|town|village)\.?$", re.IGNORECASE)
 
 
 def _trim_unbalanced(v: str | None) -> str | None:
@@ -55,6 +55,10 @@ def _trim_unbalanced(v: str | None) -> str | None:
     if v.count('"') == 1:
         v = v.strip('"').strip()
     return v or None
+
+
+_LIVING_PREFIX = re.compile(r"^(?:ЖК|Ж/К|СТ|СНТ|СДТ|СОТ|С/Т|ZhK|ZHK|JK|садоводство|дачи|дачный массив|dacha massiv|садовое товарищество)\.?\s+(?=\S)", re.I)
+_LIVING_SUFFIX = re.compile(r"\s+(?:саяжайы|саяжай|бау-бақша серіктестігі|тұрғын үй кешені)$", re.I)
 
 
 def _strip_settlement_words(city: str) -> str:
@@ -93,6 +97,8 @@ def assemble(rp: RuleParse) -> tuple[dict, dict]:
     for f, key in (("district", "DISTRICT"), ("living_area", "LIVING_AREA"), ("street_name", "STREET_NAME"),
                    ("landmark", "LANDMARK")):
         v = _trim_unbalanced(_val(rp, key))
+        if f == "living_area" and v and not conv.get("living_area_keep_type_word"):
+            v = _LIVING_SUFFIX.sub("", _LIVING_PREFIX.sub("", v)).strip() or v     # «СТ Строитель», «Металлург саяжайы» → the name (Q6, Q15)
         if v:
             fields[f] = v
             prov[f] = "string"
@@ -114,7 +120,7 @@ def assemble(rp: RuleParse) -> tuple[dict, dict]:
 
     house = _val(rp, "HOUSE")
     if house:
-        fields["house"] = house.replace(" ", "")
+        fields["house"] = re.sub(r"^(\d+)-([^\W\d_])$", r"\1\2", house.replace(" ", ""))   # «21-а» → «21а»
         prov["house"] = "string"
         join = conv.get("house_building_join")
         if join is not None and rp.meta.get("house_building"):
