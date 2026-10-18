@@ -5,6 +5,8 @@ Jury endpoint:  POST /api/v1/parse/batch   body = [{"id","raw_address"}, ...]  (
 Also:           POST /api/v1/parse/batch/file (multipart upload), POST /api/v1/parse (single),
                 ?explain=1 on both parse endpoints (adds spans/tokens/flags/provenance),
                 POST /api/v1/corrections, GET /health, GET /version.
+Archive:        every batch is kept in SQLite under JANA_DATA_DIR: GET /api/v1/runs, /runs/stats, /runs/{id},
+                /runs/{id}/download, /runs/{id}/points (see archive.py; JANA_ARCHIVE=off disables).
 Human-in-the-loop: POST /api/v1/conflicts/scan (local parser vs AI labeler → queue), GET /api/v1/conflicts,
                 GET /api/v1/conflicts/{id}, POST /api/v1/conflicts/{id}/resolve, POST /api/v1/conflicts/{id}/approve.
 """
@@ -22,6 +24,7 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from . import __version__
+from .archive import get_archive
 from .conflicts import DEFAULT_MIN_CONFIDENCE, ConflictStore, classify
 from .schemas import ConflictResolution, Correction, ExplainOut, RecordIn, RecordOut
 from .service import components, get_parser, parse_batch, parse_one
@@ -94,6 +97,23 @@ def _respond(rows: list[dict], explain: bool, download: bool) -> JSONResponse:
     return JSONResponse(_serialize(rows, explain), headers=headers)
 
 
+def _parse_and_archive(records: list[dict], explain: bool, source: str) -> list[dict]:
+    """Parse, then keep the batch in the run archive (best effort — the response never depends on it)."""
+    t0 = time.perf_counter()
+    rows = parse_batch(records, explain)
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    arch = get_archive()
+    if arch is not None:
+        try:
+            from .gazetteer.osm import get_gazetteer
+            gz = get_gazetteer()
+            geo = [r.get("geo") if explain else (gz.geocode(r) if gz.geo_ready() else None) for r in rows]
+            arch.log(source, rows, elapsed_ms, geo, __version__)
+        except Exception:  # noqa: BLE001 — never fail a parse because the archive hiccupped
+            pass
+    return rows
+
+
 @app.post("/api/parse", response_model=None, include_in_schema=False)   # alias used by the static frontend (app.js)
 @app.post("/api/v1/parse/batch", response_model=None,
           responses={200: {"description": "Array of records in the jury schema (ExplainOut with ?explain=1)"}})
@@ -117,7 +137,7 @@ async def parse_batch_endpoint(request: Request,
         payload = _parse_payload_bytes(data)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"invalid JSON: {e}") from e
-    return _respond(parse_batch(_to_records(payload), explain), explain, download)
+    return _respond(_parse_and_archive(_to_records(payload), explain, "batch"), explain, download)
 
 
 @app.post("/api/v1/parse/batch/file", response_model=None)
@@ -127,12 +147,53 @@ async def parse_batch_file(file: UploadFile = File(...), explain: bool = Query(F
         payload = _parse_payload_bytes(await file.read())
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"invalid JSON: {e}") from e
-    return _respond(parse_batch(_to_records(payload), explain), explain, download)
+    return _respond(_parse_and_archive(_to_records(payload), explain, f"file:{file.filename or ''}"), explain, download)
 
 
 @app.post("/api/v1/parse", response_model=None)
 def parse_single(record: RecordIn, explain: bool = Query(False)):
-    return JSONResponse(_serialize([parse_one(record.id, record.raw_address, explain)], explain)[0])
+    rows = _parse_and_archive([{"id": record.id, "raw_address": record.raw_address}], explain, "single")
+    return JSONResponse(_serialize(rows, explain)[0])
+
+
+# ------------------------------------------------------------------ run archive
+@app.get("/api/v1/runs")
+def runs_list(limit: int = Query(50, ge=1, le=500)) -> list[dict]:
+    """Recent batches: when, how many records, timing, share of addresses found in our database."""
+    arch = get_archive()
+    return arch.runs(limit) if arch else []
+
+
+@app.get("/api/v1/runs/stats")
+def runs_stats() -> dict:
+    arch = get_archive()
+    return arch.stats() if arch else {"runs": 0, "records": 0, "disabled": True}
+
+
+@app.get("/api/v1/runs/{run_id}")
+def runs_get(run_id: int) -> dict:
+    arch = get_archive()
+    run = arch.run(run_id) if arch else None
+    if run is None:
+        raise HTTPException(404, "no such run")
+    return run
+
+
+@app.get("/api/v1/runs/{run_id}/download")
+def runs_download(run_id: int):
+    arch = get_archive()
+    if arch is None or arch.run(run_id) is None:
+        raise HTTPException(404, "no such run")
+    return JSONResponse(arch.records(run_id), headers={"Content-Disposition": f'attachment; filename="run_{run_id}.json"'})
+
+
+@app.get("/api/v1/runs/{run_id}/points")
+def runs_points(run_id: int) -> list[dict]:
+    """Map points of a run: {id, lat, lon, precision, in_database}."""
+    arch = get_archive()
+    if arch is None or arch.run(run_id) is None:
+        raise HTTPException(404, "no such run")
+    return arch.points(run_id)
 
 
 @app.post("/api/v1/corrections")

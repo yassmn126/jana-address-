@@ -57,7 +57,7 @@ they are never consulted at inference (the brief forbids answer lookup by exact 
 
 ## Develop
 ```bash
-make test        # 290 tests: golden conventions, API, ML contract, stress rules, independent + adversarial benchmarks, robustness, fuzz, geocoding, AI cross-check
+make test        # 323 tests: golden conventions, API, ML contract, stress rules, independent + adversarial benchmarks, robustness, fuzz, geocoding, AI cross-check
 make api-dev     # uvicorn --reload on :8000      (pip install -r api/requirements-dev.txt)
 make web-dev     # vite dev server on :5173, proxies /api
 make eval        # jury-metric replica on a gold file (eval/metric.py)
@@ -70,6 +70,7 @@ make speed       # 1000 records through the running API
 make images save-images offline-test
 ```
 Who does what: [docs/HANDOFF.md](docs/HANDOFF.md). Conventions and decisions: [docs/CONVENTIONS.md](docs/CONVENTIONS.md).
+How it all fits together, data, parameters, stack: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). What each jury criterion gets: [docs/CHECKLIST.md](docs/CHECKLIST.md).
 
 ## Repository
 ```
@@ -103,6 +104,7 @@ docs/               CONVENTIONS.md · HANDOFF.md · ML.md · ARCHITECTURE.md
 | Calibrated confidence (logistic + isotonic, JSON, numpy-only at runtime) | ✅ on synthetic + handmade gold — refit on the real dev set |
 | Geocoding (house → street → микрорайон → district → city point, `?explain=1` / `POST /api/v1/geocode`) + suggest (`GET /api/v1/suggest`) | ✅ 97.4 % of real OSM addresses typed messily resolve to the exact building |
 | Robustness (21 metamorphic transformations incl. **wrong keyboard layout** «Fkvfns? ek/ F,fz 10» and Latin lookalikes «Aлмaты»), adversarial stress set, experiment history, AI cross-check vs an LLM | ✅ `make robustness`, `make history`, `make verify` — docs/ML.md §2a–2c, docs/ROBUSTNESS.md |
+| **Run archive** (SQLite in the `/data` volume): every batch ever parsed — inputs, outputs, confidence, timing, and per record whether the address exists in our OSM database (geocoding precision); `GET /api/v1/runs`, `/runs/stats`, `/runs/{id}/download`, `/runs/{id}/points` for a map | ✅ offline, no external DB needed (the jury run has no network) |
 | Day 0 on `train.json`: one command — pseudo-labels (+ Claude or a local vLLM as a second labeler), agreement → gold, disagreement → review page, warm-start fine-tune, re-tune, re-calibrate, A/B logged | ✅ `make day0` / `make day0-claude` |
 
 Secrets, personal data and `train.json` are never committed (see `.gitignore`).
