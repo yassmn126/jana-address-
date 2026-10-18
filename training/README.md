@@ -30,8 +30,8 @@ export ANTHROPIC_API_KEY=...                      # or a local vLLM: --provider 
 python -m training.label_llm --input data/train.json --output data/labels_llm.jsonl --limit 100   # try 100 first
 python -m training.label_llm --input data/train.json --output data/labels_llm.jsonl --resume      # then all
 ```
-Default model `claude-sonnet-5-5` ($2 / $10 per MTok — 5 000 records ≈ 2–3 M tokens ≈ a few dollars;
-`--model claude-haiku-5-5` is ~20× cheaper, check quality on the first 100). The script asks for
+Default model `claude-opus-5-5` ($4 / $20 per MTok; 5 000 records ≈ 2–3 M tokens, and the ~10k-token conventions
+prompt is prompt-cached across batches). `--model` picks another model — check quality on the first 100. The script asks for
 structured JSON (`output_config.format = json_schema`) so parsing never fails. For a very large file use
 the Message Batches API (50 % off, asynchronous). **The API is a labeling tool only — the jury run is
 offline, so no API call can ever be part of inference.**

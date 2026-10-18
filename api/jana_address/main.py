@@ -142,6 +142,40 @@ def add_correction(c: Correction) -> dict:
     return {"stored": True, "path": str(path)}
 
 
+@app.post("/api/v1/verify", response_model=None)
+def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
+                    model: str = Query("claude-opus-5-5")):
+    """AI cross-check (dev / ops tool, never part of parsing): our parse vs an LLM labeler, field-by-field diff.
+
+    Works where the repository's eval/ and training/ are available (`make api-dev`) and a provider is configured
+    (ANTHROPIC_API_KEY / `ant auth login` for `anthropic`, OPENAI_BASE_URL for a local vLLM). The offline jury image
+    returns 503. At most 50 records per call. Disagreements are for a human to decide (eval/llm_verify.py → review.html)."""
+    import sys
+    root = Path(__file__).resolve().parents[2]
+    if not (root / "eval" / "llm_verify.py").exists():
+        raise HTTPException(503, "verification tooling is not part of this image (run from the repository: make api-dev)")
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    if len(records) > 50:
+        raise HTTPException(413, "at most 50 records per verify call (use eval/llm_verify.py for files)")
+    try:
+        from eval.llm_verify import run
+    except ImportError as e:
+        raise HTTPException(503, f"verification dependencies missing: {e}") from e
+    if provider == "anthropic":
+        try:
+            import anthropic  # noqa: F401
+        except ImportError as e:
+            raise HTTPException(503, "pip install anthropic (api/requirements-dev.txt)") from e
+    recs = [{"id": r.id, "raw_address": r.raw_address} for r in records]
+    try:
+        result = run(recs, {}, provider, model, batch_size=20)
+    except Exception as e:  # noqa: BLE001 — surface provider / credential errors as 502, never crash the API
+        raise HTTPException(502, f"{provider} failed: {type(e).__name__}: {e}") from e
+    return {"summary": result["summary"],
+            "records": [{k: r[k] for k in ("id", "raw_address", "ours", "llm", "disagreements", "issues")} for r in result["rows"]]}
+
+
 @app.exception_handler(Exception)
 async def _unhandled(_, exc: Exception):
     return JSONResponse(status_code=500, content={"error": type(exc).__name__, "detail": str(exc)})

@@ -1,5 +1,5 @@
 -r requirements.txt
 pytest==8.3.4
 httpx==0.28.1
-anthropic>=0.40
+anthropic>=1.15        # beta.messages fallbacks / output_config used by training/label_llm.py
 openai>=1.50

@@ -5,7 +5,7 @@ SAMPLE ?= data/sample_input.json
 GOLD ?= data/sample_output.json
 
 .PHONY: help up down logs test eval parse label-dry label dataset synth train export calibrate eval-dev images save-images offline-test speed web-dev api-dev \
-        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check history
+        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check history verify robustness
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -112,6 +112,12 @@ history: ## experiment history table (eval/history.jsonl → docs/EXPERIMENTS.md
 ml-cold-start: gazetteer synth-grammar train-charcrf tune ## everything above + calibration + A/B, no train.json needed
 	$(PY) -m training.calibrate --gold data/dataset/synth_dev_gold.json --gold data/dev_handmade.json:10 --gold data/stress_handmade.json:10 --eval-gold data/test_handmade.json --plot
 	$(MAKE) ab test
+
+verify: ## AI cross-check: ours vs an LLM on the demo set → runs/verify/{report.md,review.html,review_queue.jsonl}
+	$(PY) -m eval.llm_verify --input data/demo_input.json --gold data/demo_gold.json --out runs/verify $(VERIFY_ARGS)
+
+robustness: ## metamorphic tests + per-category scores → docs/ROBUSTNESS.md
+	$(PY) -m eval.robustness --md docs/ROBUSTNESS.md > /dev/null && head -26 docs/ROBUSTNESS.md
 
 # ------------------------------------------------------------------ when train.json arrives
 pseudo-label: ## offline silver labels (rules ⊕ model agree) + review queue for the UI → data/labels_pseudo.jsonl

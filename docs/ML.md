@@ -89,6 +89,22 @@ name keeps its number when a second number or «дом N» follows; a typo'd fir
 
 The held-out set moved too, without being looked at row by row: rules 96.50 → 99.81, hybrid 99.64 → 99.81.
 
+## 2b. Robustness and AI cross-check
+
+**Metamorphic tests** (`make robustness`, report in [ROBUSTNESS.md](ROBUSTNESS.md)): 17 transformations that change the string
+but not the answer — case, NBSP/zero-width/BOM, doubled spaces, tabs/newlines, commas removed, country/postcode prefix,
+phone/note suffix, Latin «kv», glued «кв70», semicolons. Consistency is the share of records whose scored fields stay
+identical. Twelve of them are pinned at 100 % in `api/tests/test_robustness.py`. Also per-category scores (glued, Kazakh,
+Latin, микрорайон, fraction, dash, landmark, village, no city, …).
+
+**AI cross-check** (`make verify`, `eval/llm_verify.py`, `POST /api/v1/verify`): our parse vs an LLM labeler (Claude Opus 5.5
+with the conventions prompt and structured JSON output, or a local vLLM on the university GPU). Every field where they differ goes
+to a human: `review.html` (pick ours / LLM / type a value → export `corrections.jsonl` → `build_dataset --corrections`) and
+`review_queue.jsonl` for the review UI. LLM values that are not in the string are flagged — the brief's copy-not-rewrite rule
+applies to the LLM too. With gold, both sides are scored and each disagreement gets a verdict. Needs `ANTHROPIC_API_KEY` (or
+`ant auth login`), or `VERIFY_ARGS="--provider openai-compatible"` with `OPENAI_BASE_URL`. Never part of parsing; the offline
+jury image answers `/api/v1/verify` with 503. Do not send `train.json` to an external API without the organizers' OK.
+
 ## 3. Commands
 
 ```bash
