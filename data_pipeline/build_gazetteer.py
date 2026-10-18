@@ -449,7 +449,7 @@ def build(osm: dict, out: str, report_path: str | None) -> dict:
         g = groups.get(key)
         if g is None:
             g = groups[key] = {"settlement": s, "name": ru, "base": base, "type": typ, "alt": set(), "votes": Counter(),
-                               "highway": Counter(), "houses": {}}
+                               "highway": Counter(), "houses": {}, "pts": []}
         g["highway"][w["highway"]] += 1
         for k in ("name:kk", "name", "old_name", "alt_name", "name:en", "old_name:ru", "alt_name:ru"):
             if names.get(k):
@@ -457,6 +457,7 @@ def build(osm: dict, out: str, report_path: str | None) -> dict:
                 if b and norm(b) != norm(base):
                     g["alt"].add(b)
         for (plat, plon) in w["pts"]:
+            g["pts"].append((plat, plon))
             d = city_district_of(plat, plon, s)
             if d is not None:
                 g["votes"][d["id"]] += 1
@@ -479,7 +480,7 @@ def build(osm: dict, out: str, report_path: str | None) -> dict:
             continue
         g = cands[0] if len(cands) == 1 else next((c for c in cands if c["type"] == typ), cands[0])
         d = city_district_of(lat, lon, s)
-        g["houses"][norm_house(hn)] = (hn, d["id"] if d else None)
+        g["houses"][norm_house(hn)] = (hn, d["id"] if d else None, lat, lon)
         if d is not None:
             g["votes"][d["id"]] += 2
         house_hits += 1
@@ -513,7 +514,9 @@ def build(osm: dict, out: str, report_path: str | None) -> dict:
                 if part.strip():
                     con.execute("INSERT INTO settlement_names VALUES (?,?,?)", (norm(part), s["id"], k))
     for d in city_districts:
-        con.execute("INSERT INTO city_districts VALUES (?,?,?,?)", (d["id"], d["settlement"]["id"], d["name"], d["kk"]))
+        c = d["geom"].representative_point()
+        con.execute("INSERT INTO city_districts VALUES (?,?,?,?,?,?)", (d["id"], d["settlement"]["id"], d["name"], d["kk"],
+                                                                      round(c.y, 5), round(c.x, 5)))
         variants = {d["name"]} | ({d["kk"]} if d["kk"] else set())
         for k, v in d["names"].items():
             b = split_district(v)[0]
@@ -529,29 +532,43 @@ def build(osm: dict, out: str, report_path: str | None) -> dict:
             con.execute("INSERT INTO living_names VALUES (?,?)", (norm(l["kk"]), i))
     sid = 0
     house_pool: list[str] = []
+    house_points: list[tuple] = []
     for (setl, b, _t), g in groups.items():
         sid += 1
         votes = g["votes"]
         top = votes.most_common(1)[0][0] if votes else None
-        con.execute("INSERT INTO streets VALUES (?,?,?,?,?,?,?,?,?,?)", (
+        # street point = the sampled way node closest to the mean of all samples (stays ON the street when it curves)
+        pts = g["pts"]
+        mlat, mlon = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+        slat, slon = min(pts, key=lambda p: (p[0] - mlat) ** 2 + (p[1] - mlon) ** 2)
+        con.execute("INSERT INTO streets VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (
             sid, setl, g["name"], g["base"], b, g["type"], top, len(votes), len(g["houses"]),
-            g["highway"].most_common(1)[0][0]))
-        for alt in g["alt"]:
-            con.execute("INSERT INTO street_names VALUES (?,?)", (norm(alt), sid))
+            g["highway"].most_common(1)[0][0], round(slat, 5), round(slon, 5)))
+        alts = set(g["alt"])
+        for nm in [g["base"]] + list(g["alt"]):
+            stripped = re.sub(r"^(?:[А-ЯЁӘҒҚҢӨҰҮҺІA-Z]\.\s*){1,2}", "", nm)      # «Ш. Калдаякова», «Б.Момышулы»
+            if stripped != nm and len(stripped) >= 3:
+                alts.add(stripped)
+        for alt in alts:
+            if norm(alt) != b:
+                con.execute("INSERT INTO street_names VALUES (?,?)", (norm(alt), sid))
         if len(votes) > 1:              # house-level district only matters where the street crosses districts
-            for hn_norm, (hn, did) in g["houses"].items():
+            for hn_norm, (hn, did, _la, _lo) in g["houses"].items():
                 if did is not None:
                     con.execute("INSERT INTO houses VALUES (?,?,?)", (sid, hn_norm, did))
-        for hn_norm, (hn, did) in g["houses"].items():
+        for hn_norm, (hn, did, hla, hlo) in g["houses"].items():
             house_pool.append(hn)
+            house_points.append((sid, hn_norm, int(round(hla * 1e5)), int(round(hlo * 1e5))))
     import random as _r
     _r.Random(5).shuffle(house_pool)
+    con.executemany("INSERT OR IGNORE INTO house_points VALUES (?,?,?,?)", house_points)
     con.executemany("INSERT INTO house_samples VALUES (?)", [(h,) for h in house_pool[:60000]])
     con.executemany("INSERT INTO pois VALUES (?,?,?)", pois)
     con.executescript(INDEXES)
     con.commit()
     stats = {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-             for t in ("settlements", "settlement_names", "city_districts", "living_areas", "streets", "houses", "house_samples", "pois")}
+             for t in ("settlements", "settlement_names", "city_districts", "living_areas", "streets", "houses", "house_points",
+                       "house_samples", "pois")}
     con.execute("INSERT INTO meta VALUES ('stats', ?)", (json.dumps(stats),))
     con.commit()
     con.execute("VACUUM")
@@ -585,13 +602,16 @@ CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE settlements(id INTEGER PRIMARY KEY, name TEXT, name_kk TEXT, name_en TEXT, place TEXT,
                          province TEXT, district TEXT, lat REAL, lon REAL, population INTEGER, n_streets INTEGER);
 CREATE TABLE settlement_names(norm TEXT, settlement_id INTEGER, key TEXT);
-CREATE TABLE city_districts(id INTEGER PRIMARY KEY, settlement_id INTEGER, name TEXT, name_kk TEXT);
+CREATE TABLE city_districts(id INTEGER PRIMARY KEY, settlement_id INTEGER, name TEXT, name_kk TEXT, lat REAL, lon REAL);
 CREATE TABLE district_names(norm TEXT, district_id INTEGER);
 CREATE TABLE living_areas(id INTEGER PRIMARY KEY, settlement_id INTEGER, name TEXT, base TEXT, base_norm TEXT,
                           stem_norm TEXT, kind TEXT, district_id INTEGER, lat REAL, lon REAL);
 CREATE TABLE living_names(norm TEXT, living_id INTEGER);
 CREATE TABLE streets(id INTEGER PRIMARY KEY, settlement_id INTEGER, name TEXT, base TEXT, base_norm TEXT, type TEXT,
-                     district_id INTEGER, n_districts INTEGER, n_houses INTEGER, highway TEXT);
+                     district_id INTEGER, n_districts INTEGER, n_houses INTEGER, highway TEXT, lat REAL, lon REAL);
+-- geocoding: every OSM house point, coordinates ×1e5 as integers (≈1 m)
+CREATE TABLE house_points(street_id INTEGER, house_norm TEXT, lat_e5 INTEGER, lon_e5 INTEGER,
+                          PRIMARY KEY (street_id, house_norm)) WITHOUT ROWID;
 CREATE TABLE street_names(norm TEXT, street_id INTEGER);
 CREATE TABLE houses(street_id INTEGER, house_norm TEXT, district_id INTEGER);
 CREATE TABLE house_samples(house TEXT);
@@ -607,6 +627,8 @@ CREATE INDEX ix_ln ON living_names(norm);
 CREATE INDEX ix_st ON streets(settlement_id, base_norm);
 CREATE INDEX ix_stn ON street_names(norm);
 CREATE INDEX ix_h ON houses(street_id, house_norm);
+CREATE INDEX ix_st_g ON streets(base_norm);
+CREATE INDEX ix_la_g ON living_areas(base_norm);
 """
 
 

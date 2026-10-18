@@ -142,6 +142,23 @@ def add_correction(c: Correction) -> dict:
     return {"stored": True, "path": str(path)}
 
 
+@app.get("/api/v1/suggest")
+def suggest(q: str = Query(..., min_length=2, description="what the user has typed so far"),
+            city: str | None = Query(None, description="restrict to streets / микрорайоны of this settlement"),
+            limit: int = Query(10, ge=1, le=50)) -> list[dict]:
+    """Autocomplete from the OSM gazetteer: settlements (no city) or streets + микрорайоны/ЖК of a city."""
+    from .gazetteer.osm import get_gazetteer
+    return get_gazetteer().suggest(q, city, limit)
+
+
+@app.post("/api/v1/geocode", response_model=None)
+def geocode(record: RecordIn) -> dict:
+    """Parse one address and return its point: {lat, lon, precision} (house → street → microdistrict → district → locality)."""
+    out = parse_one(record.id, record.raw_address, explain=True)
+    return {"id": record.id, "raw_address": record.raw_address,
+            "fields": {k: out[k] for k in RecordOut.model_fields if k not in ("id", "raw_address")}, "geo": out.get("geo")}
+
+
 @app.post("/api/v1/verify", response_model=None)
 def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
                     model: str = Query("claude-opus-5-5")):

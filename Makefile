@@ -5,7 +5,7 @@ SAMPLE ?= data/sample_input.json
 GOLD ?= data/sample_output.json
 
 .PHONY: help up down logs test eval parse label-dry label dataset synth train export calibrate eval-dev images save-images offline-test speed web-dev api-dev \
-        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check history verify robustness
+        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check history verify robustness geocode-check
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -115,6 +115,9 @@ ml-cold-start: gazetteer synth-grammar train-charcrf tune ## everything above + 
 
 verify: ## AI cross-check: ours vs an LLM on the demo set → runs/verify/{report.md,review.html,review_queue.jsonl}
 	$(PY) -m eval.llm_verify --input data/demo_input.json --gold data/demo_gold.json --out runs/verify $(VERIFY_ARGS)
+
+geocode-check: ## 500 real OSM addresses, typed messily → parse → geocode → distance (docs/GEOCODING.md)
+	$(PY) -m eval.geocode_check --n 500 --md docs/GEOCODING.md | head -12
 
 robustness: ## metamorphic tests + per-category scores → docs/ROBUSTNESS.md
 	$(PY) -m eval.robustness --md docs/ROBUSTNESS.md > /dev/null && head -26 docs/ROBUSTNESS.md

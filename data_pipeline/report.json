@@ -41,16 +41,17 @@
  ],
  "living_areas": 5350,
  "street_ways_unassigned": 2279,
- "houses_matched": 1008625,
+ "houses_matched": 1008850,
  "tables": {
   "settlements": 7796,
   "settlement_names": 25790,
   "city_districts": 21,
   "living_areas": 5350,
-  "streets": 50505,
-  "houses": 50431,
+  "streets": 50504,
+  "houses": 50432,
+  "house_points": 976839,
   "house_samples": 60000,
   "pois": 58129
  },
- "size_mb": 15.7
+ "size_mb": 36.4
 }

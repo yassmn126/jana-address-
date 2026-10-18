@@ -156,9 +156,13 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
 
     # overlap resolution between different fields: keyword-anchored rule spans first, then the higher score;
     # a model span that loses falls back to the rule span of its field when that one still fits
+    # keyword-anchored rule spans win only a same-token conflict with a model span of another field («район алматы»:
+    # district vs city); when the model's span is longer («18-я (микрорайон Болашак)») the higher score decides as before
+    model_offsets = {(x.start, x.end) for x in final.values() if x.rule == "model"}
+
     def anchored(sp: Span) -> bool:
         rule = sp.rule[6:] if sp.rule.startswith("agree:") else sp.rule
-        return rule in ANCHORED_RULES
+        return rule in ANCHORED_RULES and (sp.start, sp.end) in model_offsets
 
     accepted = sorted(final.values(), key=lambda s: (not anchored(s), -s.score))
     kept: list[Span] = []

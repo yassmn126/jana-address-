@@ -403,6 +403,10 @@ class RuleParser:
             if toks[i].kind != "WORD" or not self._free(toks[i]):
                 i += 1
                 continue
+            prev = self._prev_content(toks, i)
+            if prev is not None and toks[prev].role == "street_type":
+                i += 1                       # «ул. Карагандинская 119» is a street named after the region
+                continue
             best = None
             # try longest n-gram of consecutive WORD tokens (dots allowed between)
             words: list[int] = []
@@ -420,6 +424,10 @@ class RuleParser:
                 j += 1
             if best:
                 idxs, p = best
+                after = self._next_content(toks, idxs[-1])
+                if after is not None and toks[after].role == "street_type":
+                    i = idxs[-1] + 1             # «Акмолинская ул. 5» — a street named after the region
+                    continue
                 # swallow a following «область/обл» keyword
                 nxt = self._next_content(toks, idxs[-1])
                 if nxt is not None and toks[nxt].role == "province_kw":

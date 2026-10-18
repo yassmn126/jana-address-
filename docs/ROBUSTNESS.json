@@ -1,0 +1,167 @@
+{
+ "base": 99.96,
+ "transforms": {
+  "lower": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "upper": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "nbsp": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "zwsp_after_comma": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "double_space": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "tab_newline": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "no_space_after_comma": {
+   "score": 99.92,
+   "consistency": 99.73,
+   "changed": 1
+  },
+  "commas_to_spaces": {
+   "score": 98.31,
+   "consistency": 98.4,
+   "changed": 6
+  },
+  "bom_prefix": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "country_prefix": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "postcode_prefix": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "phone_suffix": {
+   "score": 99.88,
+   "consistency": 99.47,
+   "changed": 2
+  },
+  "note_suffix": {
+   "score": 99.88,
+   "consistency": 99.47,
+   "changed": 2
+  },
+  "trailing_dot": {
+   "score": 99.92,
+   "consistency": 99.73,
+   "changed": 1
+  },
+  "kv_latin": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "kv_glued": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  },
+  "semicolons": {
+   "score": 99.96,
+   "consistency": 100.0,
+   "changed": 0
+  }
+ },
+ "categories": {
+  "glued": {
+   "n": 12,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "kazakh": {
+   "n": 33,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "latin": {
+   "n": 16,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "microdistrict": {
+   "n": 77,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "fraction_house": {
+   "n": 43,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "letter_house": {
+   "n": 26,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "dash_apartment": {
+   "n": 14,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "landmark": {
+   "n": 19,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "living_area": {
+   "n": 26,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "district_in_string": {
+   "n": 52,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "province_in_string": {
+   "n": 37,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "no_city": {
+   "n": 27,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "no_street_type": {
+   "n": 81,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "3plus_details": {
+   "n": 46,
+   "score": 100.0,
+   "all4": 1.0
+  },
+  "noise_words": {
+   "n": 12,
+   "score": 100.0,
+   "all4": 1.0
+  }
+ }
+}

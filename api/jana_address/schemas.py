@@ -61,6 +61,7 @@ class ExplainOut(RecordOut):
     provenance: dict[str, Optional[str]] = {}
     field_confidence: dict[str, float] = {}
     model_probs: dict[str, float] = {}
+    geo: Optional[dict] = None        # {lat, lon, precision: house|house_near|street|microdistrict|district|locality, source}
 
 
 class Correction(BaseModel):

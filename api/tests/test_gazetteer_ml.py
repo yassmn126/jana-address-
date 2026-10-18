@@ -154,3 +154,49 @@ def test_calibrator_json_roundtrip(tmp_path, monkeypatch):
     assert abs(p - 0.88) < 0.01                       # sigmoid(2) ≈ 0.881
     monkeypatch.setattr(heuristic, "_CAL", {**cal, "version": VERSION - 1})
     assert heuristic.calibrated_confidence([], {}, None, 5, "x") is None
+
+
+# ------------------------------------------------------------------ geocoding + suggest (Yandex / 2GIS-style)
+@needs_osm
+@pytest.mark.parametrize("raw,precision,box", [
+    ("г. Алматы, ул. Толе би 286/5, кв. 12", "house", (43.1, 43.4, 76.7, 77.1)),
+    ("Астана, пр. Мангилик Ел 51", "house", (51.0, 51.3, 71.2, 71.7)),
+    ("Алматы, мкр Аксай-4, 98, кв 21", "microdistrict", (43.1, 43.4, 76.7, 77.1)),
+    ("Ш.Калдаякова 46 Туркестан", "house", (43.2, 43.4, 68.1, 68.4)),       # street without its initial
+    ("АРАЛ, УЛ. КАРАКУМ 2/1", "house", (46.7, 46.9, 61.5, 61.8)),           # renamed town (seed «Аральск», OSM «Арал»)
+    ("Шымкент, Енбекшинский район", "district", (42.2, 42.5, 69.4, 69.8)),
+])
+def test_geocode_precision_and_location(raw, precision, box):
+    from jana_address.service import parse_one
+    geo = parse_one("x", raw, explain=True)["geo"]
+    assert geo and geo["precision"] == precision, geo
+    assert box[0] < geo["lat"] < box[1] and box[2] < geo["lon"] < box[3], geo
+
+
+@needs_osm
+def test_region_named_street_is_not_a_province():
+    from jana_address.service import parse_one
+    out = parse_one("x", "АСТАНА, УЛ. КАРАГАНДИНСКАЯ 119")
+    assert out["province"] == "Астана" and out["street_name"] == "КАРАГАНДИНСКАЯ" and out["house"] == "119"
+    assert parse_one("x", "Карагандинская обл., г. Темиртау, пр. Мира 100")["province"] == "Карагандинская область"
+
+
+@needs_osm
+def test_suggest_streets_and_settlements():
+    gz = Gazetteer(path=GZ_PATH)
+    streets = gz.suggest("толе", "Алматы", 5)
+    assert streets and streets[0]["kind"] == "street" and streets[0]["street_name"] == "Толе би"
+    towns = gz.suggest("караг", None, 5)
+    assert towns[0]["label"] == "Караганда" and towns[0]["place"] == "city"
+    assert gz.suggest("а", "Алматы") == []                       # too short
+
+
+@needs_osm
+def test_geocode_and_suggest_endpoints():
+    from fastapi.testclient import TestClient
+    from jana_address.main import app
+    with TestClient(app) as c:
+        r = c.post("/api/v1/geocode", json={"id": "1", "raw_address": "Астана, Кенесары 40"}).json()
+        assert r["geo"]["precision"] == "house" and r["fields"]["street_name"] == "Кенесары"
+        assert c.get("/api/v1/suggest", params={"q": "кенес", "city": "Астана"}).json()[0]["street_name"].startswith("Кенесары")
+        assert "geo" not in c.post("/api/v1/parse/batch", json=[{"id": "1", "raw_address": "Астана, Кенесары 40"}]).json()[0]

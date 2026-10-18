@@ -99,6 +99,8 @@ docs/               CONVENTIONS.md · HANDOFF.md · ML.md · ARCHITECTURE.md
 | ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses, ONNX 10.5 MB, 0.6 ms/record; jury metric on hand-labeled sets: held-out 99.8, adversarial stress set 100.0 | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
 | Gazetteer: OSM Kazakhstan → sqlite (settlements ru/kk, provinces, city districts, 5.3k микрорайоны/ЖК, 50k streets, house-level districts), seed fallback | ✅ `make gazetteer` |
 | Calibrated confidence (logistic + isotonic, JSON, numpy-only at runtime) | ✅ on synthetic + handmade gold — refit on the real dev set |
+| Geocoding (house → street → микрорайон → district → city point, `?explain=1` / `POST /api/v1/geocode`) + suggest (`GET /api/v1/suggest`) | ✅ 97.4 % of real OSM addresses typed messily resolve to the exact building |
+| Robustness (17 metamorphic transformations), adversarial stress set, experiment history, AI cross-check vs an LLM | ✅ `make robustness`, `make history`, `make verify` — docs/ML.md §2a–2c |
 | Self-training on `train.json` (rules ⊕ model agreement → silver labels + review queue) | ✅ `make pseudo-label` → `make finetune-real` |
 
 Secrets, personal data and `train.json` are never committed (see `.gitignore`).

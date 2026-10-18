@@ -91,6 +91,8 @@ def parse_one(id_: str, raw: str, explain: bool = False, mode: str | None = None
             out["provenance"] = prov
             out["field_confidence"] = {s.field.lower(): round(s.score, 3) for s in rp.spans.values()}
             out["model_probs"] = rp.meta.get("model_probs", {})
+            from .gazetteer.osm import get_gazetteer
+            out["geo"] = get_gazetteer().geocode(fields)
             if "model_token_labels" in rp.meta:
                 for tk, lab, pr in zip(out["tokens"], rp.meta["model_token_labels"], rp.meta["model_token_probs"]):
                     tk["model_label"], tk["model_prob"] = lab, pr

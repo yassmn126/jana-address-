@@ -50,11 +50,13 @@ the label keeps it as written). Model choice between v4 and v4b was made on the 
 tuning); v4b is also better on the held-out set, which is reported, not used.
 
 * **Speed:** 0.6 ms/record end to end (rules + tagger + arbiter + gazetteer + confidence). 1 000 records take 0.61 s; the limit is 300 s.
-* **Confidence:** ECE 0.0012 out-of-fold, 0.004 on the held-out set. Review budget: auto-accepting everything gives 97.6 %
+* **Confidence:** ECE 0.0017 out-of-fold, 0.005 on the held-out set. Review budget: auto-accepting everything gives 97.6 %
   address-block accuracy on the calibration mix, sending the 10 % least confident to a human gives 98.8 % on the rest
   (`api/artifacts/calibrator.json`, plot in `calibrator.png`).
-* **Arbiter:** τ_solo 0.7, τ_field 0.5, τ_weak 0.3, τ_override 0.9 — the model wins conflicts against positional grammar guesses,
-  numbers bound to an explicit keyword («кв 70», «4подьезд») still need the model at ≥ 0.9 to override the rule.
+* **Arbiter:** τ_solo 0.7, τ_field 0.5, τ_weak 0.3, τ_override 0.9, τ_veto 0.9. The model wins conflicts against positional
+  grammar guesses and can veto a positional guess it is sure is noise. Numbers bound to an explicit keyword («кв 70»,
+  «4подьезд») still need the model at ≥ 0.9 to override the rule. Keyword-anchored spans («район Алматы») win same-token
+  conflicts with the model.
 * **Artifacts:** `model.onnx` 10.5 MB + `model_meta.json` 1.0 MB, ONNX ≡ PyTorch (max |Δ emission| 9e-6).
 
 `dev_handmade` (139) and `test_handmade` (89) are realistic addresses written and labeled by hand
@@ -105,6 +107,26 @@ applies to the LLM too. With gold, both sides are scored and each disagreement g
 `ant auth login`), or `VERIFY_ARGS="--provider openai-compatible"` with `OPENAI_BASE_URL`. Never part of parsing; the offline
 jury image answers `/api/v1/verify` with 503. Do not send `train.json` to an external API without the organizers' OK.
 
+## 2c. Geocoding and suggest — what Yandex / 2GIS address stacks do, offline
+
+The brief's pain points include «не считается автоматически зона доставки»: an address string has no coordinates. The gazetteer
+now stores every OSM house point (977k), street points and district centroids, so the service can do what a geocoder does:
+
+* `?explain=1` → `geo: {lat, lon, precision}`, also `POST /api/v1/geocode`. Precision, as in the Yandex Geocoder: `house` (the
+  OSM building) → `house_near` (same house without its корпус/fraction) → `street` → `microdistrict` → `district` → `locality`.
+  The jury schema is unchanged; `geo` exists only in explain mode.
+* `GET /api/v1/suggest?q=&city=` → prefix autocomplete over streets (ranked by number of OSM houses), микрорайоны/ЖК and
+  settlements. That's the «prevent bad input at the source» feature of their forms; the review UI can use it for corrections.
+* `make geocode-check` ([GEOCODING.md](GEOCODING.md)): 500 real OSM addresses from ~100 cities, typed in 7 messy styles
+  (capitals, no type word, city last, Kazakh order, «д.»), parse → geocode → distance to the true point:
+  **97.4 % resolve to the exact building**, 97.6 % land within 2 km. This measures the parse → match chain; OSM's own
+  accuracy is a separate question.
+
+Fixes this check found: renamed towns (OSM «Арал», «Саркан», «Казалы» vs the seed's «Аральск», «Сарканд», «Казалинск»);
+streets with initials matched without them («Калдаякова» = «Ш. Калдаякова»); streets named after a region («ул. Карагандинская»,
+«Акмолинская ул.») are no longer parsed as the province; the house is searched in every OSM segment of a street before its
+midpoint is used.
+
 ## 3. Commands
 
 ```bash
@@ -115,6 +137,10 @@ make train-charcrf          # → api/artifacts/model.onnx + model_meta.json (CP
 make tune                   # → api/artifacts/arbiter_policy.json
 make ab NOTE="what changed" # rules vs model vs hybrid, appended to eval/history.jsonl → docs/EXPERIMENTS.md
 make ml-cold-start          # all of the above + calibration + tests
+make robustness             # metamorphic tests → docs/ROBUSTNESS.md
+make geocode-check          # real OSM addresses → parse → geocode → docs/GEOCODING.md
+make verify                 # AI cross-check (needs a Claude key or a local vLLM) → runs/verify/review.html
+make history                # experiment table → docs/EXPERIMENTS.md
 ```
 `JANA_MODE=rules|model|hybrid` switches the runtime (default hybrid). `JANA_MODEL=off` disables the tagger,
 `JANA_GAZETTEER=seed` disables OSM, `JANA_CALIBRATOR=off` falls back to the heuristic confidence. `GET /version` shows what is loaded.

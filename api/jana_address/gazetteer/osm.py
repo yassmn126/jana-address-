@@ -8,6 +8,7 @@ by exact input, a gazetteer keyed by street/city is explicitly allowed («это
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import threading
 from functools import lru_cache
@@ -62,6 +63,17 @@ class Gazetteer:
         rows = self._q(
             "SELECT s.id, s.name, s.name_kk, s.place, s.province, s.district, s.n_streets, s.population "
             "FROM settlement_names n JOIN settlements s ON s.id = n.settlement_id WHERE n.norm = ?", (key,))
+        if not rows:
+            # renamed towns: the seed knows «Аральск / Арал», OSM only the current name «Арал»
+            seed = self._seed_cities.get(key)
+            for alt in ([seed.get("kk"), seed["name"]] + list(seed.get("aliases") or [])) if seed else []:
+                if alt and norm(alt) != key:
+                    rows = self._q(
+                        "SELECT s.id, s.name, s.name_kk, s.place, s.province, s.district, s.n_streets, s.population "
+                        "FROM settlement_names n JOIN settlements s ON s.id = n.settlement_id WHERE n.norm = ? "
+                        "AND s.place IN ('city', 'town')", (norm(alt),))
+                    if rows:
+                        break
         if not rows:
             return None
         cands = {r[0]: r for r in rows}.values()
@@ -290,6 +302,92 @@ class Gazetteer:
 
     def street_exists(self, city: str | None, street: str | None) -> bool:
         return bool(self._streets(city, street))
+
+    # ------------------------------------------------------------------ geocoding (what Yandex / 2GIS geocoders return)
+    def _has(self, table: str, column: str) -> bool:
+        return any(r[1] == column for r in self._q(f"PRAGMA table_info({table})"))
+
+    @lru_cache(maxsize=1)
+    def geo_ready(self) -> bool:
+        return self.con is not None and self._has("streets", "lat") and bool(self._q("SELECT 1 FROM sqlite_master WHERE name='house_points'"))
+
+    def geocode(self, fields: dict) -> dict | None:
+        """Parsed fields → a point and how precise it is, Yandex-geocoder style:
+        house (OSM building/address point) → house_near (same house without its корпус/fraction part) → street →
+        microdistrict → district → locality. None when not even the settlement is known."""
+        if not self.geo_ready():
+            return None
+        city = fields.get("city")
+        s = self.settlement(city, fields.get("province")) if city else None
+        if s is None:
+            return None
+        street, house = fields.get("street_name"), fields.get("house")
+
+        def pt(lat, lon, precision, **extra):
+            return {"lat": round(lat, 6), "lon": round(lon, 6), "precision": precision, "source": "osm", **extra}
+
+        if street:
+            rows = self._streets(city, street)
+            st_type = fields.get("street_type")
+            if st_type and len(rows) > 1:
+                rows = [r for r in rows if r[1] == st_type] or rows
+            if house:                                     # every segment group of the street before its midpoint
+                hn = re.sub(r"[\s\-]", "", house.lower().replace("ё", "е"))
+                base = re.split(r"[/]", hn)[0]
+                for key, precision in ((hn, "house"), (base, "house_near")):
+                    if precision == "house_near" and base == hn:
+                        continue
+                    for sid, _t, _d, _n in rows:
+                        h = self._q("SELECT lat_e5, lon_e5 FROM house_points WHERE street_id = ? AND house_norm = ?", (sid, key))
+                        if h:
+                            return pt(h[0][0] / 1e5, h[0][1] / 1e5, precision)
+            for sid, _t, _d, _n in sorted(rows, key=lambda r: -(self._q("SELECT n_houses FROM streets WHERE id = ?", (r[0],))[0][0] or 0)):
+                st = self._q("SELECT lat, lon, name FROM streets WHERE id = ?", (sid,))
+                if st and st[0][0] is not None:
+                    return pt(st[0][0], st[0][1], "street", matched=st[0][2])
+        for name in (fields.get("living_area"), street if fields.get("street_type") in ("микрорайон", "квартал", "жилой массив") else None):
+            row = self._living(city, name) if name else None
+            if row is not None:
+                la = self._q("SELECT lat, lon FROM living_areas WHERE settlement_id = ? AND name = ?", (s["id"], row[0]))
+                if la and la[0][0] is not None:
+                    return pt(la[0][0], la[0][1], "microdistrict", matched=row[0])
+        if fields.get("district"):
+            d = self._q("SELECT d.lat, d.lon FROM district_names n JOIN city_districts d ON d.id = n.district_id "
+                        "WHERE n.norm = ? AND d.settlement_id = ?", (norm(fields["district"]), s["id"]))
+            if d and d[0][0] is not None:
+                return pt(d[0][0], d[0][1], "district")
+        loc = self._q("SELECT lat, lon FROM settlements WHERE id = ?", (s["id"],))
+        return pt(loc[0][0], loc[0][1], "locality") if loc else None
+
+    # ------------------------------------------------------------------ suggest (autocomplete while the user types)
+    def suggest(self, q: str, city: str | None = None, limit: int = 10) -> list[dict]:
+        """Prefix search over streets, микрорайоны/ЖК (in the city when given) and settlements — the «fix the input at
+        the source» feature of Yandex / 2GIS forms. Ranked by how many OSM houses a street has."""
+        key = norm(q)
+        if len(key) < 2 or self.con is None:
+            return []
+        hi = key + "\uffff"
+        out: list[dict] = []
+        s = self.settlement(city) if city else None
+        if s is not None:
+            for name, base, typ, nh, lat, lon in self._q(
+                    "SELECT name, base, type, n_houses, lat, lon FROM streets WHERE settlement_id = ? AND base_norm >= ? "
+                    "AND base_norm < ? ORDER BY n_houses DESC LIMIT ?", (s["id"], key, hi, limit)):
+                out.append({"kind": "street", "label": name, "city": s["name"], "street_type": typ, "street_name": base,
+                            "houses": nh, "lat": lat, "lon": lon})
+            for name, base, kind, lat, lon in self._q(
+                    "SELECT name, base, kind, lat, lon FROM living_areas WHERE settlement_id = ? AND base_norm >= ? "
+                    "AND base_norm < ? LIMIT ?", (s["id"], key, hi, limit)):
+                out.append({"kind": "living_area", "label": name, "city": s["name"], "living_kind": kind or None,
+                            "living_area": base, "lat": lat, "lon": lon})
+        else:
+            for sid, name, place, prov, lat, lon in self._q(
+                    "SELECT DISTINCT s.id, s.name, s.place, s.province, s.lat, s.lon FROM settlement_names n "
+                    "JOIN settlements s ON s.id = n.settlement_id WHERE n.norm >= ? AND n.norm < ? "
+                    "ORDER BY CASE s.place WHEN 'city' THEN 0 WHEN 'town' THEN 1 ELSE 2 END, s.n_streets DESC LIMIT ?",
+                    (key, hi, limit)):
+                out.append({"kind": "settlement", "label": name, "place": place, "province": prov, "lat": lat, "lon": lon})
+        return out[:limit]
 
 
 def _osa(a: str, b: str, limit: int) -> int:
