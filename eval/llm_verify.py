@@ -53,14 +53,17 @@ def our_fields(rid: str, raw: str) -> tuple[dict, dict]:
     return fields, p
 
 
-def llm_labels(records: list[dict], provider: str, model: str, batch_size: int, usage: dict) -> dict[str, dict]:
+def llm_labels(records: list[dict], provider: str, model: str, batch_size: int, usage: dict,
+               credentials: tuple[str | None, str | None] | None = None) -> dict[str, dict]:
     labeler = PROVIDERS[provider]
+    # a per-request Claude key (the API's bring-your-own-key header); other providers keep their 4-argument signature
+    extra = {"credentials": credentials} if credentials and provider == "anthropic" else {}
     system = build_system_prompt()
     out: dict[str, dict] = {}
     for i in range(0, len(records), batch_size):
         batch = records[i:i + batch_size]
         try:
-            got = labeler(batch, system, model, usage)
+            got = labeler(batch, system, model, usage, **extra)
         except LLMRefusal as e:
             print(f"  {e}", file=sys.stderr)
             for r in batch:
@@ -172,10 +175,11 @@ render();
 </script></body></html>""", encoding="utf-8")
 
 
-def run(records: list[dict], gold_by_id: dict[str, dict], provider: str, model: str, batch_size: int) -> dict:
+def run(records: list[dict], gold_by_id: dict[str, dict], provider: str, model: str, batch_size: int,
+        credentials: tuple[str | None, str | None] | None = None) -> dict:
     usage = {"input": 0, "output": 0}
     t0 = time.time()
-    llm = llm_labels(records, provider, model, batch_size, usage)
+    llm = llm_labels(records, provider, model, batch_size, usage, credentials)
     rows, per_field, n_dis = [], Counter(), 0
     ours_all, llm_all, gold_all = [], [], []
     for r in records:

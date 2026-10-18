@@ -18,11 +18,13 @@ Request design (why each knob is set the way it is):
     opens for JANA_AI_COOLDOWN_S and every record keeps its local answer (the service never blocks on the API).
   * privacy — phone numbers and e-mails are masked before sending (conventions ignore them anyway).
 
-Credentials: ANTHROPIC_API_KEY (or `ant auth login`), never in the repo. Local model: JANA_AI_PROVIDER=openai-compatible,
+Credentials: ANTHROPIC_API_KEY (or `ant auth login`) on the server, or the operator's own key sent with ONE request
+(X-Anthropic-Api-Key header → client_for(): used for that request, never stored or logged). Local model: JANA_AI_PROVIDER=openai-compatible,
 OPENAI_BASE_URL=http://gpu-box:8000/v1 (vLLM), JANA_AI_MODEL=<served model name>.
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -66,6 +68,10 @@ class AIConfig:
     send_draft: bool = field(default_factory=lambda: _env("JANA_AI_DRAFT", "1") == "1")
     mask_pii: bool = field(default_factory=lambda: _env("JANA_AI_MASK_PII", "1") == "1")
     base_url: str | None = field(default_factory=lambda: os.environ.get("OPENAI_BASE_URL"))
+    # bring your own key: a per-request key (and the workspace of a user-scoped sk-ant-usr-… key). repr=False keeps
+    # them out of any repr/log; status() never includes them either.
+    api_key: str | None = field(default=None, repr=False)
+    workspace_id: str | None = field(default_factory=lambda: os.environ.get("ANTHROPIC_WORKSPACE_ID") or None, repr=False)
 
 
 class AIError(RuntimeError):
@@ -137,10 +143,11 @@ class Stats:
 
 
 class AIClient:
-    def __init__(self, cfg: AIConfig | None = None, transport=None) -> None:
-        """transport(items, cfg) -> (records, usage): injectable for tests and for the Batch API path."""
+    def __init__(self, cfg: AIConfig | None = None, transport=None, stats: Stats | None = None) -> None:
+        """transport(items, cfg) -> (records, usage): injectable for tests and for the Batch API path.
+        stats: share the process-wide cost meter (per-request clients made by client_for)."""
         self.cfg = cfg or AIConfig()
-        self.stats = Stats()
+        self.stats = stats or Stats()
         self._transport = transport
         self._sdk = None
         self._lock = threading.Lock()
@@ -156,10 +163,9 @@ class AIClient:
                 import anthropic  # noqa: F401
             except ImportError:
                 return False, "anthropic SDK not installed (pip install anthropic)"
-            if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
-                    or _env("JANA_AI_ASSUME_CREDENTIALS", "0") == "1"):
-                return False, ("no credentials: set ANTHROPIC_API_KEY "
-                               "(or JANA_AI_ASSUME_CREDENTIALS=1 after `ant auth login`)")
+            if self.credentials_source() == "none":
+                return False, ("no credentials: set ANTHROPIC_API_KEY on the server, send your own key in the "
+                               "X-Anthropic-Api-Key header, or JANA_AI_ASSUME_CREDENTIALS=1 after `ant auth login`")
         elif self.cfg.provider == "openai-compatible":
             try:
                 import openai  # noqa: F401
@@ -170,6 +176,15 @@ class AIClient:
         else:
             return False, f"unknown provider {self.cfg.provider!r}"
         return self._circuit_ok()
+
+    def credentials_source(self) -> str:
+        """'request' (a key sent with this request), 'server' (env / `ant auth login` profile) or 'none'."""
+        if self.cfg.api_key:
+            return "request"
+        if (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+                or _env("JANA_AI_ASSUME_CREDENTIALS", "0") == "1"):
+            return "server"
+        return "none"
 
     def _circuit_ok(self) -> tuple[bool, str]:
         if time.time() < self._open_until:
@@ -190,7 +205,12 @@ class AIClient:
     def _anthropic(self, items: list[dict]) -> tuple[list[dict], dict]:
         import anthropic
         if self._sdk is None:
-            self._sdk = anthropic.Anthropic(max_retries=self.cfg.max_retries, timeout=self.cfg.timeout_s)
+            extra: dict = {}
+            if self.cfg.api_key:                       # else the SDK reads ANTHROPIC_API_KEY / the auth profile
+                extra["api_key"] = self.cfg.api_key
+            if self.cfg.workspace_id:                  # user-scoped keys (sk-ant-usr-…) bill a named workspace
+                extra["default_headers"] = {"anthropic-workspace-id": self.cfg.workspace_id}
+            self._sdk = anthropic.Anthropic(max_retries=self.cfg.max_retries, timeout=self.cfg.timeout_s, **extra)
         resp = self._sdk.messages.create(
             model=self.cfg.model,
             max_tokens=max_tokens_for(len(items)),
@@ -292,6 +312,7 @@ class AIClient:
     def status(self) -> dict:
         ok, why = self.available()
         return {"available": ok, "reason": why, "provider": self.cfg.provider, "model": self.cfg.model,
+                "credentials": self.credentials_source() if self.cfg.provider == "anthropic" else "server",
                 "effort": self.cfg.effort, "default_mode": self.cfg.mode, "batch_size": self.cfg.batch_size,
                 "concurrency": self.cfg.concurrency, "min_conf": self.cfg.min_conf,
                 "keep_local_conf": self.cfg.keep_local_conf, "prompt_version": prompt_version(),
@@ -320,3 +341,14 @@ def set_client(client: AIClient | None) -> None:
     """Tests and the eval CLI swap the process-wide client."""
     global _CLIENT
     _CLIENT = client
+
+
+def client_for(api_key: str | None = None, workspace_id: str | None = None) -> AIClient:
+    """The process-wide client — or, when a request brings its own key, a transient client holding that key for the
+    request only (bring your own key: the hosted demo works with no server-side credentials). It shares the
+    process-wide Stats so the cost meter stays whole; the key is never persisted, logged or returned."""
+    base = get_client()
+    if not api_key:
+        return base
+    cfg = dataclasses.replace(base.cfg, api_key=api_key, workspace_id=workspace_id or base.cfg.workspace_id)
+    return AIClient(cfg, transport=base._transport, stats=base.stats)

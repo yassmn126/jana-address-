@@ -118,7 +118,8 @@ def parse_one(id_: str, raw: str, explain: bool = False, mode: str | None = None
         return out
 
 
-def parse_batch(records: Iterable[dict], explain: bool = False, mode: str | None = None, ai: str | None = None) -> list[dict]:
+def parse_batch(records: Iterable[dict], explain: bool = False, mode: str | None = None, ai: str | None = None,
+                ai_client=None) -> list[dict]:
     """ai: off | foreign | fallback | always (default env JANA_AI_MODE, else off) — see docs/AI_MODE.md.
     With the AI on, records are parsed locally first (with explain data for routing) and the AI answer is merged."""
     ai_mode = (ai or os.environ.get("JANA_AI_MODE") or "off").lower()
@@ -126,7 +127,7 @@ def parse_batch(records: Iterable[dict], explain: bool = False, mode: str | None
         return [parse_one(str(r.get("id", i)), r.get("raw_address", ""), explain, mode) for i, r in enumerate(records)]
     from .llm.policy import apply_ai
     rows = [parse_one(str(r.get("id", i)), r.get("raw_address", ""), True, mode) for i, r in enumerate(records)]
-    return apply_ai(rows, ai_mode)
+    return apply_ai(rows, ai_mode, ai_client)      # ai_client: a per-request (bring-your-own-key) client
 
 
 def main(argv: list[str] | None = None) -> int:

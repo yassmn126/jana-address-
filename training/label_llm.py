@@ -79,14 +79,19 @@ class LLMRefusal(RuntimeError):
     """The model (and its server-side fallback) declined the batch; the caller marks those records for review."""
 
 
-def label_with_anthropic(batch: list[dict], system: str, model: str, usage: dict) -> list[dict]:
+def label_with_anthropic(batch: list[dict], system: str, model: str, usage: dict,
+                         credentials: tuple[str | None, str | None] | None = None) -> list[dict]:
     """Claude API, structured JSON output. The SDK retries 429 / 5xx / connection errors itself (max_retries);
-    a 400 is a bug in the request and is raised immediately. Large stable system prompt → prompt caching."""
+    a 400 is a bug in the request and is raised immediately. Large stable system prompt → prompt caching.
+    credentials: (api_key, workspace_id) sent with one API request (bring your own key); default: the environment."""
     import anthropic  # lazy import: not needed for --provider rules
 
+    key, workspace = credentials or (None, None)
     # user-scoped keys (sk-ant-usr-…) are not tied to a workspace: the API then needs the workspace to bill
-    workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    workspace = workspace or os.environ.get("ANTHROPIC_WORKSPACE_ID")
     extra = {"default_headers": {"anthropic-workspace-id": workspace}} if workspace else {}
+    if key:
+        extra["api_key"] = key
     client = anthropic.Anthropic(max_retries=6, **extra)
     resp = client.beta.messages.create(
         model=model,
@@ -112,7 +117,8 @@ def label_with_anthropic(batch: list[dict], system: str, model: str, usage: dict
         if len(batch) == 1:
             raise RuntimeError(f"max_tokens on a single record {batch[0]['id']}")
         half = len(batch) // 2                       # output did not fit: split and retry
-        return label_with_anthropic(batch[:half], system, model, usage) + label_with_anthropic(batch[half:], system, model, usage)
+        return (label_with_anthropic(batch[:half], system, model, usage, credentials)
+                + label_with_anthropic(batch[half:], system, model, usage, credentials))
     text = next(b.text for b in resp.content if b.type == "text")
     return json.loads(text)["records"]
 

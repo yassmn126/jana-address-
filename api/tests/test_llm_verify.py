@@ -120,3 +120,30 @@ def test_workspace_header_for_user_scoped_keys(monkeypatch):
     seen.clear()
     label_llm.label_with_anthropic([{"id": "a", "raw_address": "Абая 10"}], "SYS", "m", {"input": 0, "output": 0})
     assert "default_headers" not in seen
+
+
+def test_request_credentials_reach_the_labeler(monkeypatch):
+    """Bring your own key: (key, workspace) given per call override the environment; through run() only the Claude
+    labeler receives them — other providers keep their 4-argument signature."""
+    seen = {}
+
+    class _Messages:
+        def create(self, **kw):
+            ids = [r["id"] for r in json.loads(kw["messages"][0]["content"].split("\n", 1)[1])]
+            return _Resp([_rec(i) for i in ids])
+
+    class _Client:
+        def __init__(self, **kw):
+            seen.update(kw)
+            self.beta = types.SimpleNamespace(messages=_Messages())
+
+    monkeypatch.setitem(sys.modules, "anthropic", types.SimpleNamespace(Anthropic=_Client))
+    monkeypatch.delenv("ANTHROPIC_WORKSPACE_ID", raising=False)
+    usage = {"input": 0, "output": 0}
+    label_llm.label_with_anthropic([{"id": "a", "raw_address": "Абая 10"}], "SYS", "m", usage, credentials=("sk-test", "wrkspc_req"))
+    assert seen["api_key"] == "sk-test" and seen["default_headers"] == {"anthropic-workspace-id": "wrkspc_req"}
+    from eval import llm_verify
+    calls = []
+    monkeypatch.setitem(llm_verify.PROVIDERS, "fake", lambda batch, system, model, usage: calls.append(1) or [_rec(r["id"]) for r in batch])
+    res = llm_verify.run([{"id": "1", "raw_address": "Абая 10"}], {}, "fake", "m", 20, credentials=("sk-test", None))
+    assert res["summary"]["n"] == 1 and calls == [1]

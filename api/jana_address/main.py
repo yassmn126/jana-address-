@@ -9,6 +9,8 @@ Archive:        every batch is kept in SQLite under JANA_DATA_DIR: GET /api/v1/r
                 /runs/{id}/download, /runs/{id}/points (see archive.py; JANA_ARCHIVE=off disables).
 Human-in-the-loop: POST /api/v1/conflicts/scan (local parser vs AI labeler → queue), GET /api/v1/conflicts,
                 GET /api/v1/conflicts/{id}, POST /api/v1/conflicts/{id}/resolve, POST /api/v1/conflicts/{id}/approve.
+Claude key:     the server's ANTHROPIC_API_KEY, or the caller's own key in the X-Anthropic-Api-Key header
+                (+ X-Anthropic-Workspace-Id for sk-ant-usr-… keys): used for that request only, never stored or logged.
 """
 from __future__ import annotations
 
@@ -36,6 +38,16 @@ app = FastAPI(title="Jana Address", version=__version__,
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 _READY = {"ok": False, "started": time.time()}
+
+
+def _request_credentials(request: Request) -> tuple[str | None, str | None]:
+    """Bring your own key: (api_key, workspace_id) from this request's headers, or (None, None).
+    Headers, never query strings (URLs end up in access logs); the values are passed to the SDK and dropped."""
+    key = (request.headers.get("x-anthropic-api-key") or "").strip()
+    ws = (request.headers.get("x-anthropic-workspace-id") or "").strip()
+    if key and not key.isascii():
+        raise HTTPException(400, "the Anthropic key must be plain ASCII (stray quotes, spaces or a Cyrillic letter?)")
+    return key or None, ws or None
 
 
 @app.on_event("startup")
@@ -97,10 +109,15 @@ def _respond(rows: list[dict], explain: bool, download: bool) -> JSONResponse:
     return JSONResponse(_serialize(rows, explain), headers=headers)
 
 
-def _parse_and_archive(records: list[dict], explain: bool, source: str, ai: str | None = None) -> list[dict]:
+def _parse_and_archive(records: list[dict], explain: bool, source: str, ai: str | None = None,
+                       creds: tuple[str | None, str | None] = (None, None)) -> list[dict]:
     """Parse (optionally with the AI path, see llm/), then keep the batch in the run archive (best effort)."""
+    ai_client = None
+    if creds[0]:                                   # the caller's own Claude key, for this batch only
+        from .llm.client import client_for
+        ai_client = client_for(*creds)
     t0 = time.perf_counter()
-    rows = parse_batch(records, explain, ai=ai)
+    rows = parse_batch(records, explain, ai=ai, ai_client=ai_client)
     elapsed_ms = (time.perf_counter() - t0) * 1000
     arch = get_archive()
     if arch is not None:
@@ -139,32 +156,37 @@ async def parse_batch_endpoint(request: Request,
         payload = _parse_payload_bytes(data)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"invalid JSON: {e}") from e
-    return _respond(_parse_and_archive(_to_records(payload), explain, "batch", ai), explain, download)
+    return _respond(_parse_and_archive(_to_records(payload), explain, "batch", ai, _request_credentials(request)),
+                    explain, download)
 
 
 @app.post("/api/v1/parse/batch/file", response_model=None)
-async def parse_batch_file(file: UploadFile = File(...), explain: bool = Query(False), download: bool = Query(False),
+async def parse_batch_file(request: Request, file: UploadFile = File(...), explain: bool = Query(False),
+                           download: bool = Query(False),
                            ai: str | None = Query(None, pattern="^(off|foreign|fallback|always)$")):
     """Alias of /api/v1/parse/batch for clients that insist on a named multipart field."""
     try:
         payload = _parse_payload_bytes(await file.read())
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"invalid JSON: {e}") from e
-    return _respond(_parse_and_archive(_to_records(payload), explain, f"file:{file.filename or ''}", ai), explain, download)
+    return _respond(_parse_and_archive(_to_records(payload), explain, f"file:{file.filename or ''}", ai,
+                                       _request_credentials(request)), explain, download)
 
 
 @app.post("/api/v1/parse", response_model=None)
-def parse_single(record: RecordIn, explain: bool = Query(False),
+def parse_single(request: Request, record: RecordIn, explain: bool = Query(False),
                  ai: str | None = Query(None, pattern="^(off|foreign|fallback|always)$")):
-    rows = _parse_and_archive([{"id": record.id, "raw_address": record.raw_address}], explain, "single", ai)
+    rows = _parse_and_archive([{"id": record.id, "raw_address": record.raw_address}], explain, "single", ai,
+                              _request_credentials(request))
     return JSONResponse(_serialize(rows, explain)[0])
 
 
 @app.get("/api/v1/ai/status")
-def ai_status() -> dict:
-    """Runtime AI path: availability, model, effort, prompt version, tokens and USD spent since start."""
-    from .llm.client import get_client
-    return get_client().status()
+def ai_status(request: Request) -> dict:
+    """Runtime AI path: availability, model, effort, prompt version, tokens and USD spent since start.
+    `credentials`: "server" (env / auth profile), "request" (a key in this request's header) or "none"."""
+    from .llm.client import client_for
+    return client_for(*_request_credentials(request)).status()
 
 
 # ------------------------------------------------------------------ run archive
@@ -230,7 +252,8 @@ def geocode(record: RecordIn) -> dict:
             "fields": {k: out[k] for k in RecordOut.model_fields if k not in ("id", "raw_address")}, "geo": out.get("geo")}
 
 
-def _crosscheck(records: list[RecordIn], provider: str, model: str) -> dict:
+def _crosscheck(records: list[RecordIn], provider: str, model: str,
+                creds: tuple[str | None, str | None] = (None, None)) -> dict:
     """Run eval.llm_verify (our parse vs an LLM labeler) on ≤ 50 records; shared by /verify and /conflicts/scan.
 
     Needs the repository's eval/ and training/ (`make api-dev`) and a configured provider (ANTHROPIC_API_KEY /
@@ -254,19 +277,29 @@ def _crosscheck(records: list[RecordIn], provider: str, model: str) -> dict:
             import anthropic  # noqa: F401
         except ImportError as e:
             raise HTTPException(503, "pip install anthropic (api/requirements-dev.txt)") from e
+        if not (creds[0] or os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+                or os.environ.get("JANA_AI_ASSUME_CREDENTIALS") == "1"):
+            raise HTTPException(401, "нет ключа Claude: вставьте свой ключ в поле «Ключ Anthropic» (он уходит только с "
+                                     "этим запросом и не сохраняется) или задайте ANTHROPIC_API_KEY на сервере")
     recs = [{"id": r.id, "raw_address": r.raw_address} for r in records]
     try:
-        return run(recs, {}, provider, model, batch_size=20)
-    except Exception as e:  # noqa: BLE001 — surface provider / credential errors as 502, never crash the API
-        raise HTTPException(502, f"{provider} failed: {type(e).__name__}: {e}") from e
+        return run(recs, {}, provider, model, batch_size=20, credentials=creds if provider == "anthropic" else None)
+    except Exception as e:  # noqa: BLE001 — credential errors as 401, provider errors as 502, never crash the API
+        name, msg = type(e).__name__, str(getattr(e, "message", e))
+        if name in ("AuthenticationError", "PermissionDeniedError"):
+            raise HTTPException(401, f"Claude отклонил ключ ({name}): проверьте его в Anthropic Console") from e
+        if name == "BadRequestError" and "workspace" in msg:
+            raise HTTPException(401, "ключ привязан к пользователю, а не к workspace: укажите Workspace ID (wrkspc_…)") from e
+        raise HTTPException(502, f"{provider} failed: {name}: {msg[:300]}") from e
 
 
 @app.post("/api/v1/verify", response_model=None)
-def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
+def verify_endpoint(request: Request, records: list[RecordIn],
+                    provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
                     model: str = Query("claude-fable-5-1", description="claude-fable-5-1 (strongest) | claude-opus-5-5 | claude-haiku-5-5")):
     """AI cross-check (dev / ops tool, never part of parsing): our parse vs an LLM labeler, field-by-field diff.
     At most 50 records per call. To keep the disagreements for a human, use /api/v1/conflicts/scan instead."""
-    result = _crosscheck(records, provider, model)
+    result = _crosscheck(records, provider, model, _request_credentials(request))
     return {"summary": result["summary"],
             "records": [{k: r[k] for k in ("id", "raw_address", "ours", "llm", "disagreements", "issues")} for r in result["rows"]]}
 
@@ -285,7 +318,7 @@ def _store_correction(record: dict) -> Path:
 
 
 @app.post("/api/v1/conflicts/scan", response_model=None)
-def conflicts_scan(records: list[RecordIn],
+def conflicts_scan(request: Request, records: list[RecordIn],
                    provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
                    model: str = Query("claude-fable-5-1", description="claude-fable-5-1 (strongest) | claude-opus-5-5 | claude-haiku-5-5"),
                    min_confidence: float = Query(DEFAULT_MIN_CONFIDENCE, ge=0.0, le=1.0,
@@ -293,7 +326,7 @@ def conflicts_scan(records: list[RecordIn],
                    requeue: bool = Query(False, description="re-open records that were already decided")):
     """Compare the local parser with the AI labeler on ≤ 50 records and queue what needs a human:
     a field disagreement, our confidence < min_confidence, or AI values that break the copy-not-rewrite rules."""
-    result = _crosscheck(records, provider, model)
+    result = _crosscheck(records, provider, model, _request_credentials(request))
     items = [it for it in (classify(r, min_confidence) for r in result["rows"]) if it]
     stats = _conflicts().upsert(items, provider, model, requeue=requeue)
     return {"scanned": len(result["rows"]), "needs_review": len(items), **stats,
