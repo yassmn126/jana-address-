@@ -37,6 +37,7 @@ HERE = Path(__file__).parent
 DETAIL_FIELDS = ("APARTMENT", "ENTRANCE", "FLOOR")
 NUMBER_FIELDS = ("HOUSE",) + DETAIL_FIELDS
 ADJ_SUFFIXES = ("ский", "ская", "ской", "ское", "кий", "кая", "ной", "ный", "ная", "ий", "ый", "ая")
+NAME_PARTICLES = {"би", "батыр", "батыра", "хан", "хана", "ата", "ана", "акын", "акына"}   # «Казыбек би», «Райымбек батыр»
 TIME_WORDS = {"час", "часа", "часов", "минут", "минуту", "минуты", "день", "дня", "сутки", "неделю", "полчаса"}
 CODE_WORDS = {"код", "кодом", "домофон", "домофона", "intercom", "пин"}
 CITY_WORDS_URBAN = {"город", "г", "гор", "қаласы", "каласы", "қ", "қала", "кала"}
@@ -101,6 +102,10 @@ class Lexicon:
             for stem in filter(None, stems):
                 for w in ("обл", "область", "облысы"):
                     self.province_by_variant.setdefault(match_view(f"{stem} {w}"), p)
+            for v in p["variants"]:                  # Latin: «Almaty obl», «Aktobe oblysy» from «almaty region»
+                if v.endswith(" region"):
+                    for w in ("obl", "oblast", "oblysy", "obl."):
+                        self.province_by_variant.setdefault(match_view(f"{v[:-len(' region')]} {w}"), p)
         self.province_of_city_name: dict[str, str] = {}   # Астана/Нур-Султан/… -> canonical
         for p in self.provinces:
             if p.get("city"):
@@ -123,6 +128,7 @@ class Lexicon:
             for n in names:
                 self.district_names[match_view(n)] = n
                 self.city_of_district.setdefault(match_view(n), city)
+        self.city_districts_kk: dict[str, dict] = seed.get("city_districts_kk") or {}
         for city, mapping in (seed.get("city_districts_kk") or {}).items():
             for kk, ru in mapping.items():
                 self.district_names.setdefault(match_view(kk), ru)
@@ -168,6 +174,7 @@ class RuleParser:
             rp.flags.append("empty")
             return rp
         self._split_glued_dom(rp)
+        self._split_glued_keyword(rp)        # «мкрСтроитель», «улАбая» → keyword + name
         self._phones(rp)
         self._classify(rp)
         self._province(rp)
@@ -178,6 +185,7 @@ class RuleParser:
         self._building_part(rp)              # «корпус 2» → house «12/2»
         self._district(rp)
         self._city(rp)
+        self._bare_district(rp)              # «Астана, Сарыарка, ул. …»: a chunk that is a district of the city
         self._living_area(rp)
         self._street_fallback(rp)
         self._house_fallback(rp)
@@ -197,6 +205,10 @@ class RuleParser:
     def _fuzzy_city(self, text: str):
         from ..gazetteer.osm import get_gazetteer
         return get_gazetteer().fuzzy_city(text)
+
+    def _living_anywhere(self, text: str) -> bool:
+        from ..gazetteer.osm import get_gazetteer
+        return get_gazetteer().living_base_anywhere(text)
 
     def _known_microdistrict(self, rp: RuleParse, text: str) -> bool:
         from ..gazetteer.osm import get_gazetteer
@@ -322,6 +334,22 @@ class RuleParser:
                 out.append(t)
         rp.tokens[:] = out
 
+    _GLUED_KW = re.compile(r"^([a-zа-яё]{2,5})\.?([A-ZА-ЯЁӘҒҚҢӨҰҮҺІ][^\W\d_]{2,}.*)$")
+
+    def _split_glued_keyword(self, rp: RuleParse):
+        """A lower-case street/settlement keyword glued to a capitalized name: «мкрСтроитель», «улАбая», «пр.Абая» stays."""
+        out: list[Token] = []
+        for t in rp.tokens:
+            m = self._GLUED_KW.match(t.text) if t.kind == "WORD" else None
+            if m and (self.lex.street_type_of.get(m.group(1)) or {"living_kw", "city_kw"} & self.lex.roles.get(m.group(1), set())):
+                cut = t.start + len(m.group(1))
+                out.append(Token(m.group(1), t.start, cut, "WORD", t.space_before))
+                out.append(Token(t.text[len(m.group(1)):], cut, t.end, "WORD", False))
+                rp.flags.append("glued_keyword_split")
+            else:
+                out.append(t)
+        rp.tokens[:] = out
+
     # ------------------------------------------------------------- pass 0
     def _classify(self, rp: RuleParse):
         toks = rp.tokens
@@ -344,6 +372,14 @@ class RuleParser:
                 roles.discard("apartment_kw")
             if "street_type" in roles and len(norm_token(t.text)) == 1 and not (t.end < len(rp.raw) and rp.raw[t.end] == "."):
                 roles.discard("street_type")         # «у получателя» is not «улица получателя»; «у.» / «ш.» are
+            if norm_token(t.text) in ("city", "town", "village"):   # «Astana city», «Kaskelen town» — «Esentai City» is a name
+                prv = toks[i - 1] if i > 0 and toks[i - 1].kind == "WORD" else None
+                nxt = toks[i + 1] if i + 1 < len(toks) and toks[i + 1].kind == "WORD" else None
+                known = lambda x: x is not None and (match_view(x.text) in self.lex.city_by_name or self._known_settlement(x.text))
+                roles = {"city_suffix_kk"} if known(prv) else ({"city_kw"} if known(nxt) else set())
+            if t.text in ("СТ", "СНТ", "СДТ") and not (t.end < len(rp.raw) and rp.raw[t.end] == ".") \
+                    and re.search(r"[а-яё]", rp.raw):
+                roles = {"living_kw"}                # «СТ Мичуринец» = садовое товарищество; «ст. Шу» / «ст Шу» = станция
             if norm_token(t.text) in CODE_WORDS:
                 t.role, t.label = "code_kw", "O"
                 # «код подъезда 1234», «домофон 25», «код 12#»: the number (and a following «подъезда») are not values
@@ -475,7 +511,8 @@ class RuleParser:
             p = self._prev_content(toks, i)
             if p is not None and toks[p].is_number_like and self._free(toks[p]):
                 # «55/6» fraction belongs to the house: walk back to the leading number («3/9 этаж» → floor 3 of 9)
-                if p - 2 >= 0 and toks[p - 1].is_slash and toks[p - 2].is_number_like and self._free(toks[p - 2]):
+                if p - 2 >= 0 and toks[p - 1].is_slash and toks[p - 2].is_number_like and self._free(toks[p - 2]) \
+                        and toks[p - 1].start == toks[p - 2].end and toks[p].start == toks[p - 1].end:
                     return p - 2
                 return p
             return None
@@ -485,7 +522,7 @@ class RuleParser:
             if q is not None and toks[q].is_number_like and self._free(toks[q]):
                 # number glued to a FOLLOWING keyword («9этаж») is not ours
                 if q + 1 < len(toks) and toks[q + 1].role in ("house_kw", "apartment_kw", "entrance_kw", "floor_kw") \
-                        and not toks[q + 1].space_before:
+                        and not toks[q + 1].space_before and not toks[q + 1].meta.get("bound"):
                     return None
                 return q
             return None
@@ -496,7 +533,9 @@ class RuleParser:
         def bind(kw: int, num: int, direction: str):
             fieldname = field_of(toks[kw])
             idxs = [num]
-            if num + 2 < len(toks) and toks[num + 1].is_slash and toks[num + 2].is_number_like and self._free(toks[num + 2]):
+            tight = num + 2 < len(toks) and toks[num + 1].start == toks[num].end and toks[num + 2].start == toks[num + 1].end
+            if num + 2 < len(toks) and toks[num + 1].is_slash and toks[num + 2].is_number_like and self._free(toks[num + 2]) \
+                    and (fieldname == "HOUSE" or tight):          # «кв 3 / 2 этаж»: a spaced slash separates fields
                 if fieldname == "HOUSE":
                     idxs = [num, num + 1, num + 2]             # «55/6» stays a fraction
                 else:
@@ -525,6 +564,9 @@ class RuleParser:
             if glued_prev and glued_next and p >= 1 and toks[p - 1].kind == "WORD" and not toks[p].space_before \
                     and toks[p - 1].role is None:
                 glued_prev = False                                 # «Жандосова58кв12»: 58 belongs to the street
+            if glued_prev and glued_next and p >= 1 and not toks[p].space_before \
+                    and toks[p - 1].role in ("house_kw", "apartment_kw", "entrance_kw", "floor_kw"):
+                glued_prev = False                                 # «д11кв47»: keyword-first style, 11 is the house
             if glued_prev:
                 bind(kw, p, "glued")
                 continue
@@ -569,6 +611,21 @@ class RuleParser:
                 if q is not None and self._free(toks[q]) and (toks[q].is_number_like or (toks[q].kind == "WORD" and len(toks[q].text) == 1)):
                     t.label = toks[q].label = "O"
                     rp.meta["house_building"] = toks[q].text
+                    rp.meta["house_building_span"] = (toks[q].start, toks[q].end)
+                    rp.flags.append("house_has_building_part")
+                    return
+                # Kazakh order «42 үй 2 корпус»: the number right before the keyword, right after the house
+                b = self._prev_content(toks, i)
+                if b is not None and toks[b].is_number_like and toks[b].start >= rp.spans["HOUSE"].end \
+                        and (self._free(toks[b]) or toks[b].label in ("ENTRANCE", "APARTMENT", "FLOOR")) \
+                        and all(x.kind != "PUNCT" or x.text not in (",", ";") for x in toks if rp.spans["HOUSE"].end <= x.start < toks[b].start):
+                    for f in ("ENTRANCE", "APARTMENT", "FLOOR"):
+                        sp = rp.spans.get(f)
+                        if sp is not None and sp.start == toks[b].start:
+                            del rp.spans[f]
+                    t.label = toks[b].label = "O"
+                    rp.meta["house_building"] = toks[b].text
+                    rp.meta["house_building_span"] = (toks[b].start, toks[b].end)
                     rp.flags.append("house_has_building_part")
                     return
 
@@ -636,18 +693,30 @@ class RuleParser:
                 if p is not None and self._free(toks[p]) and not self._is_kw(toks[p]) and not toks[p].is_sep \
                         and (toks[p].kind == "WORD" or (micro and toks[p].is_number_like)):
                     case = "B"
+                    gz_name = False
                     k = p
                     if micro and toks[k].is_number_like:
                         name.append(k)
                         k = self._prev_content(toks, k)
                     while k is not None and k >= 0 and toks[k].kind == "WORD" and self._free(toks[k]) and not self._is_kw(toks[k]):
                         if name and match_view(toks[k].text) in self.lex.city_by_name and (k == 0 or toks[k - 1].is_sep):
-                            break            # «Алматы Жетысу 2 мкр»: the city is not part of the name
+                            if not (len(name) == 1 and self._living_anywhere(f"{toks[k].text} {toks[name[0]].text}")):
+                                break        # «Алматы Жетысу 2 мкр»: the city is not part of the name («Аксай 4 мкр» is)
                         name.append(k)
                         k = self._prev_content(toks, k)
                         if k is not None and toks[k].is_sep:
                             break
                     name.sort()
+                    words = [x for x in name if toks[x].kind == "WORD"]
+                    if micro and words and len(words) < len(name) and toks[name[-1]].is_number_like:
+                        stem = " ".join(toks[x].text for x in words)
+                        whole = " ".join(toks[x].text for x in name)
+                        if self._living_anywhere(whole):
+                            gz_name = True   # «Аксай 4 мкр»: a known microdistrict, not the town Аксай + «4»
+                        elif self._living_anywhere(stem):
+                            # «Караганда Пришахтинск 22 мкр»: a known living area + a numbered микрорайон inside it
+                            self._set(rp, "LIVING_AREA", toks, words, "micro_living_prefix", 0.8)
+                            name = [x for x in name if x not in words]
                     q = self._next_content(toks, last_kw)
                     if q is not None and toks[q].is_number_like and self._free(toks[q]):
                         house = self._house_idxs(toks, q)
@@ -660,6 +729,8 @@ class RuleParser:
                         house = self._house_idxs(toks, k2)
             if not name:
                 continue
+            if case == "B" and gz_name:
+                case = "B_gazetteer"
             found.append({"kw": kw_idxs, "name": name, "house": house, "lemma": lemma, "micro": micro, "case": case})
 
         if not found:
@@ -682,7 +753,8 @@ class RuleParser:
             toks[k].label = "STREET_TYPE"
         rp.spans["STREET_TYPE"] = Span("STREET_TYPE", toks[primary["kw"][0]].start, toks[primary["kw"][-1]].end, "type_kw", 0.95)
         rp.meta["street_type_lemma"] = primary["lemma"]
-        self._set(rp, "STREET_NAME", toks, primary["name"], f"type_case_{primary['case']}", 0.9)
+        self._set(rp, "STREET_NAME", toks, primary["name"], f"type_case_{primary['case']}",
+                  0.99 if primary["case"] == "B_gazetteer" else 0.9)
         if primary["house"] and "HOUSE" not in rp.spans:
             self._set(rp, "HOUSE", toks, primary["house"], "after_street", 0.85)
         # remaining found chunks (e.g. two streets) stay unlabeled → leftovers lower confidence
@@ -746,6 +818,11 @@ class RuleParser:
                 # two-word districts before the keyword: «имени Казыбек би район» is rare; keep one word
             elif next_known or (next_ok and not prev_ok):
                 idxs = [q]
+                q2 = self._next_content(toks, q)       # «р-н Казыбек би», «район Байконыр»: a two-word name
+                if q2 is not None and q2 == q + 1 and toks[q2].kind == "WORD" and self._free(toks[q2]) \
+                        and not self._is_kw(toks[q2]) and (norm_token(toks[q2].text) in NAME_PARTICLES
+                        or match_view(f"{toks[q].text} {toks[q2].text}") in self.lex.district_names):
+                    idxs.append(q2)
             elif prev_ok:
                 idxs = [p]
             if idxs:
@@ -758,6 +835,31 @@ class RuleParser:
             else:
                 t.label = "O"
                 rp.flags.append("district_kw_without_name")
+
+    def _bare_district(self, rp: RuleParse):
+        """A whole comma-separated chunk equal to a district of the parsed city («Астана, Сарыарка, ул. Сейфуллина 31»)."""
+        if "DISTRICT" in rp.spans or "CITY" not in rp.spans:
+            return
+        city = rp.meta.get("city_known")
+        names = {match_view(n) for n in self.lex.city_districts.get(city, []) or []}
+        names |= {match_view(k) for k in (self.lex.city_districts_kk.get(city) or {})}
+        if not names:
+            return
+        toks = rp.tokens
+        n = len(toks)
+        i = 0
+        while i < n:
+            if toks[i].kind == "WORD" and (i == 0 or (self._prev_content(toks, i) is None or toks[self._prev_content(toks, i)].is_sep)):
+                k = i
+                while k < n and toks[k].kind == "WORD" and self._free(toks[k]) and not self._is_kw(toks[k]):
+                    k += 1
+                nxt = self._next_content(toks, k - 1) if k > i else None
+                text = " ".join(t.text for t in toks[i:k])
+                if k > i and (nxt is None or toks[nxt].is_sep) and match_view(text) in names \
+                        and match_view(text) != match_view(rp.meta.get("city_text", "")):
+                    self._set(rp, "DISTRICT", toks, list(range(i, k)), "district_bare", 0.8)
+                    return
+            i += 1
 
     # ------------------------------------------------------------- pass 5
     def _city(self, rp: RuleParse):
@@ -844,7 +946,9 @@ class RuleParser:
                     j = i
                     while j + 1 < n and toks[j + 1].kind == "WORD" and self._free(toks[j + 1]) and not self._is_kw(toks[j + 1]):
                         j += 1
-                    if (j + 1 >= n or toks[j + 1].is_sep) and j - i < 3:
+                    rest = [t for k, t in enumerate(toks) if not (i <= k <= j) and t.kind != "PUNCT"
+                            and t.role not in ("phone", "noise", "code_kw") and t.label != "O"]
+                    if (j + 1 >= n or toks[j + 1].is_sep) and j - i < 3 and rest:   # a lone «Абая» is a street
                         text = " ".join(toks[k].text for k in range(i, j + 1))
                         if self._known_settlement(text):
                             self._set(rp, "CITY", toks, list(range(i, j + 1)), "city_osm_chunk", 0.7)
@@ -889,7 +993,8 @@ class RuleParser:
                 rp.meta["district_from_city"] = rec["district"]
             # Kazakh spelling («Ақтөбе», «Қарағанды қаласы») → Russian name (Q2). Latin / old names stay as written.
             written_kk = match_view(text) == match_view(rec.get("kk", "")) and rec.get("kk") != rec["name"]
-            if (kk or written_kk) and rec["name"] != text:
+            cyrillic = bool(re.search(r"[А-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]", text))     # «Almaty qalasy» stays «Almaty»
+            if ((kk and cyrillic) or written_kk) and rec["name"] != text:
                 rp.meta["city_ru_from_kk"] = rec["name"]
 
     # ------------------------------------------------------------- pass 6

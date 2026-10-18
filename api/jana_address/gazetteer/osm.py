@@ -238,6 +238,12 @@ class Gazetteer:
                            "AND type IN ('микрорайон', 'квартал', 'жилой массив')", (s["id"], key, stem))
         return rows[0] if rows else None
 
+    @lru_cache(maxsize=4096)
+    def living_base_anywhere(self, name: str) -> bool:
+        """Is this exact living-area / microdistrict name («Аксай 4», «Пришахтинск») known in any settlement?"""
+        key = norm(name)
+        return bool(key) and bool(self._q("SELECT 1 FROM living_areas WHERE base_norm = ? LIMIT 1", (key,)))
+
     def is_microdistrict(self, city: str | None, name: str | None) -> bool:
         if self._seed_micro(city, name) is not None:
             return True

@@ -57,14 +57,15 @@ they are never consulted at inference (the brief forbids answer lookup by exact 
 
 ## Develop
 ```bash
-make test        # 178 tests: golden conventions, API, ML contract, stress rules, robustness, fuzz, geocoding, AI cross-check
+make test        # 227 tests: golden conventions, API, ML contract, stress rules, independent benchmark, robustness, fuzz, geocoding, AI cross-check
 make api-dev     # uvicorn --reload on :8000      (pip install -r api/requirements-dev.txt)
 make web-dev     # vite dev server on :5173, proxies /api
 make eval        # jury-metric replica on a gold file (eval/metric.py)
 make label-dry   # labeling pipeline with the rule parser (no API key)
 make ml-cold-start   # OSM gazetteer → synthetic data → tagger → arbiter tuning → calibration (docs/ML.md)
 make ab              # rules vs model vs hybrid on the hand-labeled gold sets (jury metric)
-make pseudo-label finetune-real   # when train.json is in data/
+make day0            # when train.json is in data/: label → review queue → fine-tune → tune → calibrate → A/B
+make benchmark       # ours vs 500 Claude-written, Claude-labeled addresses (independent of our own gold sets)
 make speed       # 1000 records through the running API
 make images save-images offline-test
 ```
@@ -96,12 +97,13 @@ docs/               CONVENTIONS.md · HANDOFF.md · ML.md · ARCHITECTURE.md
 | Jury-metric replica + error report + speed check | ✅ |
 | Labeling pipeline (LLM / local vLLM / rules) with validators | ✅ (needs train.json) |
 | Dataset builder, synthetic generator, training/export/calibration scripts | ✅ scripts + round-trip tests (no model trained yet) |
-| ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses, ONNX 10.5 MB, 0.6 ms/record; jury metric on hand-labeled sets: held-out 99.8, adversarial stress set 100.0 | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
+| ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses (v6: + Latin-aware synthetic), ONNX 10.5 MB, 0.7 ms/record; jury metric 100.00 on every hand-labeled set | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
+| **Independent benchmark**: 526 addresses written and labeled by Claude Opus 5.5 in 22 themes, not by us | ✅ 97.08 on first contact → **99.47** after the fixes it found; on a second, untouched set: main 96.30 → **99.33** — [docs/BENCHMARK.md](docs/BENCHMARK.md), `make benchmark` |
 | Gazetteer: OSM Kazakhstan → sqlite (settlements ru/kk, provinces, city districts, 5.3k микрорайоны/ЖК, 50k streets, house-level districts), seed fallback | ✅ `make gazetteer` |
 | Calibrated confidence (logistic + isotonic, JSON, numpy-only at runtime) | ✅ on synthetic + handmade gold — refit on the real dev set |
 | Geocoding (house → street → микрорайон → district → city point, `?explain=1` / `POST /api/v1/geocode`) + suggest (`GET /api/v1/suggest`) | ✅ 97.4 % of real OSM addresses typed messily resolve to the exact building |
 | Robustness (17 metamorphic transformations), adversarial stress set, experiment history, AI cross-check vs an LLM | ✅ `make robustness`, `make history`, `make verify` — docs/ML.md §2a–2c |
-| Self-training on `train.json` (rules ⊕ model agreement → silver labels + review queue) | ✅ `make pseudo-label` → `make finetune-real` |
+| Day 0 on `train.json`: one command — pseudo-labels (+ Claude or a local vLLM as a second labeler), agreement → gold, disagreement → review page, warm-start fine-tune, re-tune, re-calibrate, A/B logged | ✅ `make day0` / `make day0-claude` |
 
 Secrets, personal data and `train.json` are never committed (see `.gitignore`).
 

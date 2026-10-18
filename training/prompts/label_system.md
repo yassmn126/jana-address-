@@ -27,7 +27,7 @@ THE ONE RULE: **copy, never rewrite.** Every value except `province` and `street
 2. Microdistrict number vs house: with a named microdistrict and TWO numbers («Мкр Аксай 3а, 59») the first number is part of the name and the second is the house; with ONE number («мкр Жетысу 20») the number is the house. A number right before «микрорайон/мкр/квартал» with no name («14 мкр», «408 квартал») is the name.
 3. Duplicated city («Алматы Алматы ...») — label once. District instead of city («Турксибский район, ...») — city stays null (we fill it from a gazetteer later).
 4. Invisible characters, double spaces and stray dots are not part of any value.
-5. Postal codes (6 digits) are ignored. «корпус/блок N» after the house is ignored (not part of `house`).
+5. Postal codes (6 digits) are ignored. «корпус/блок N» after the house joins it with a slash (CONVENTIONS Q7): «12 корпус 2» → `12/2`, «12 блок А» → `12/А`, «42 үй 2 корпус» → `42/2`. The number after «корпус» is never an entrance.
 6. If the string is unparseable, return all fields null.
 
 ## Output

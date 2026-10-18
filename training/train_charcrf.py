@@ -368,7 +368,10 @@ def main(argv=None) -> int:
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     steps_per_epoch = math.ceil(len(tr) / a.bs)
     total = steps_per_epoch * a.epochs
-    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=total, pct_start=0.08)
+    # --epochs 0 with --init: no training, just re-export the init checkpoint (it must be <out>/model.pt or is copied there)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=total, pct_start=0.08) if total else None
+    if not total and a.init and not (out / "model.pt").exists():
+        torch.save({"state": model.state_dict(), "meta": meta, "epoch": 0}, out / "model.pt")
     print(f"params: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M; {steps_per_epoch} steps/epoch", flush=True)
 
     best, history = -1.0, []

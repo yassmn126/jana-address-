@@ -51,7 +51,9 @@ def evaluate(cache, gold, policy, parser) -> float:
     preds = []
     for (rp0, spans, labels, probs), g in zip(cache, gold):
         rp = copy.deepcopy(rp0)
-        arbitrate(rp, spans, parser, policy=policy, tok_labels=labels, tok_probs=probs)
+        tagger = get_tagger()
+        known = (lambda w: tagger.charcrf.featurizer.word_id(w) != 1) if tagger.charcrf is not None else None
+        arbitrate(rp, spans, parser, policy=policy, tok_labels=labels, tok_probs=probs, known_word=known)   # as service.py
         fields, prov = assemble(rp)
         enrich(fields, prov, rp)
         preds.append({"id": g["id"], **fields})

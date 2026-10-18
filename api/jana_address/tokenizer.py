@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-LETTERS = "A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі"
+LETTERS = "A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі" + "ÄäĞğİıÑñÖöŞşŪūÜüÇçÁáÉéÍíÓóÚúÝýǴǵŃń"   # + Kazakh Latin (2018/2021)
 _LET = f"[{LETTERS}]"
 _TOKEN_RE = re.compile(
     rf"(?P<word>(?<![0-9]){_LET}+(?:-(?:{_LET}|[0-9])+)*|{_LET}+)"   # letters, hyphen-joined chunks (not after a digit: «52а-18»)

@@ -55,6 +55,9 @@ Switches live in `api/jana_address/rules/conventions.yaml`; examples in `data/co
 
 | Q14 | Kazakh-spelled village the gazetteer has no Russian name for («Қазығұрт ауылы») | as written («Қазығұрт»); Claude Opus 5.5 prefers the letter-folded «Казыгурт». «Байконыр» (no Kazakh letters) stays as written, «Орал» → «Уральск» (literal Kazakh form of a known city) | **?** | `gazetteer/osm.py: city_ru` |
 
+| Q15 | Garden society «СТ Строитель», «СНТ Мичуринец» (садовое товарищество) | living_area **without** «СТ» («Строитель»), like «ЖК» (Q6); «ст. Шу» / lower-case «ст» stays a station (city keyword) | T | `rules/grammar.py: _classify`, `assembly/canon.py: _LIVING_PREFIX` |
+| Q16 | Latin «Almaty qalasy», «Turan avenue», «8 etazh» | keywords are dropped like their Cyrillic forms; the NAME stays as written in Latin («Almaty», «Turan») — only a Cyrillic Kazakh spelling maps to Russian (Q2) | T | `rules/lexicon.yaml` |
+
 Still worth one message to the organizers: **Q4** (province names) and **Q6** (ЖК) — both are one-line switches once answered.
 
 ## Review checklist (for the human verification sprint)

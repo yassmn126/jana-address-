@@ -1,88 +1,88 @@
 {
- "base": 99.92,
+ "base": 100.0,
  "transforms": {
   "lower": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "upper": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "nbsp": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "zwsp_after_comma": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "double_space": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "tab_newline": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "no_space_after_comma": {
-   "score": 99.89,
-   "consistency": 99.76,
-   "changed": 1
+   "score": 100.0,
+   "consistency": 100.0,
+   "changed": 0
   },
   "commas_to_spaces": {
-   "score": 98.36,
-   "consistency": 98.08,
-   "changed": 8
+   "score": 99.08,
+   "consistency": 98.32,
+   "changed": 7
   },
   "bom_prefix": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "country_prefix": {
-   "score": 99.92,
-   "consistency": 99.76,
-   "changed": 1
+   "score": 100.0,
+   "consistency": 100.0,
+   "changed": 0
   },
   "postcode_prefix": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "phone_suffix": {
-   "score": 99.86,
-   "consistency": 99.52,
-   "changed": 2
+   "score": 100.0,
+   "consistency": 100.0,
+   "changed": 0
   },
   "note_suffix": {
-   "score": 99.86,
-   "consistency": 99.52,
-   "changed": 2
+   "score": 99.96,
+   "consistency": 99.76,
+   "changed": 1
   },
   "trailing_dot": {
-   "score": 99.89,
+   "score": 99.96,
    "consistency": 99.76,
    "changed": 1
   },
   "kv_latin": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "kv_glued": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   },
   "semicolons": {
-   "score": 99.92,
+   "score": 100.0,
    "consistency": 100.0,
    "changed": 0
   }
@@ -95,8 +95,8 @@
   },
   "kazakh": {
    "n": 39,
-   "score": 99.62,
-   "all4": 0.9744
+   "score": 100.0,
+   "all4": 1.0
   },
   "latin": {
    "n": 17,
@@ -124,7 +124,7 @@
    "all4": 1.0
   },
   "landmark": {
-   "n": 20,
+   "n": 21,
    "score": 100.0,
    "all4": 1.0
   },
@@ -135,8 +135,8 @@
   },
   "district_in_string": {
    "n": 80,
-   "score": 99.8,
-   "all4": 0.9875
+   "score": 100.0,
+   "all4": 1.0
   },
   "province_in_string": {
    "n": 55,

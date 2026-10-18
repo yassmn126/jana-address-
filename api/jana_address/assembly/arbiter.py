@@ -23,13 +23,15 @@ from ..rules.grammar import RuleParse, RuleParser, Span
 FIELDS = ["PROVINCE", "CITY", "DISTRICT", "LIVING_AREA", "STREET_TYPE", "STREET_NAME",
           "HOUSE", "APARTMENT", "ENTRANCE", "FLOOR", "LANDMARK"]
 KEYWORD_RULES = {"kw_glued", "kw_prev", "kw_next"}
+GAZETTEER_RULES = {"type_case_B_gazetteer"}    # «Аксай 4 мкр»: the gazetteer knows the whole name — the model cannot override
 # positional guesses of the grammar (no keyword evidence): the model may override them more easily
 WEAK_RULES = {"fallback_word_number", "house_fallback", "city_seed", "after_street", "micro_as_living", "gazetteer_chunk",
               "fallback_word_sep_number", "after_street_sep", "leftover_chunk", "fallback_micro_number", "dash_after_house",
               "city_fuzzy", "city_osm_chunk"}
 # spans whose boundaries come from an explicit keyword («район Есиль», «г. Алматы», «ЖК Томирис», «Актюбинская обл»):
 # they win overlaps against model spans
-ANCHORED_RULES = KEYWORD_RULES | {"district_kw", "city_kw", "city_kk_suffix", "living_kw", "province_table", "type_kw"}
+ANCHORED_RULES = KEYWORD_RULES | {"district_kw", "city_kw", "city_kk_suffix", "living_kw", "province_table", "type_kw",
+                                  "district_bare"}
 COUNTRY = {"казахстан", "kazakhstan", "рк", "kz", "республика казахстан", "қазақстан", "казакстан"}
 HOUSE_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?(/\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?)?$")
 NUM_RE = re.compile(r"^\d+[A-Za-zА-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]?$")
@@ -99,6 +101,35 @@ def province_lookup(parser: RuleParser, text: str) -> dict | None:
     return None
 
 
+KW_ROLES = {"street_type", "house_kw", "apartment_kw", "entrance_kw", "floor_kw", "living_kw", "city_kw", "city_suffix_kk",
+            "district_kw", "province_kw", "building_kw"}
+NAME_FIELDS = {"CITY", "DISTRICT", "LIVING_AREA", "STREET_NAME", "LANDMARK"}
+
+
+def _swallows_keyword(rp: RuleParse, field: str, start: int, end: int, rule_span: Span | None,
+                      known_word=None) -> bool:
+    """A model name span that starts or ends with a lexicon keyword the grammar read as a keyword AND the tagger never
+    saw in training («Abay dangyly», «Almaty qalasy», «obl, Talgar rayon»): the grammar knows that word, the model does
+    not. Words in the tagger's vocabulary are left to the model («Expo Avenue», «Smart House», «Набережная» are names in
+    OSM). A trailing living-area / settlement word stays («Highvill Residence», «Жана Кала»)."""
+    if field not in NAME_FIELDS:
+        return False
+    toks = [t for t in rp.tokens if t.start >= start and t.end <= end and t.kind != "PUNCT"]
+    if not toks:
+        return False
+    for t in (toks[0], toks[-1]):
+        if t.kind != "WORD" or t.role not in KW_ROLES \
+                or (rule_span is not None and t.start >= rule_span.start and t.end <= rule_span.end):
+            continue
+        if len(t.text) == 1 or (known_word is not None and known_word(t.text)):
+            continue                                  # an initial «К. Либкнехта»; or a word the tagger was trained on
+        if t is toks[-1] and t is not toks[0] and (t.role in ("living_kw", "city_kw")
+                                                   or (rule_span is None and t.role == "street_type")):
+            continue                                  # «Highvill Residence», «Жана Кала»; model-only «3 линия»
+        return True
+    return False
+
+
 def _model_says_o(rp: RuleParse, span: Span, labels: list[str], probs: list[float] | None, tau: float) -> bool:
     """Every token of the rule span is O for the tagger with probability ≥ tau."""
     idx = [i for i, t in enumerate(rp.tokens) if t.start >= span.start and t.end <= span.end]
@@ -112,9 +143,10 @@ def _free_of(final: dict, span: Span, field: str) -> bool:
 
 
 def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, policy: dict | None = None,
-              tok_labels: list[str] | None = None, tok_probs: list[float] | None = None) -> None:
+              tok_labels: list[str] | None = None, tok_probs: list[float] | None = None, known_word=None) -> None:
     """Mutates rp.spans / rp.tokens / rp.meta / rp.flags in place.
-    tok_labels / tok_probs (the tagger's per-token output) enable the model veto on weak rule spans."""
+    tok_labels / tok_probs (the tagger's per-token output) enable the model veto on weak rule spans;
+    known_word(text) → True when the tagger's vocabulary has the word (see _swallows_keyword)."""
     policy = policy or POLICY
     ignore_rules = policy.get("ignore_rules", False)
     best_model: dict[str, ModelSpan] = {}
@@ -131,22 +163,36 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
             final[f] = Span(f, r.start, r.end, f"agree:{r.rule}", max(r.score, m.prob))
             rp.flags.append(f"arb_{f.lower()}_agree")
         elif r and not m:
-            if r.rule in WEAK_RULES and tok_labels and _model_says_o(rp, r, tok_labels, tok_probs, policy.get("tau_veto", 1.01)):
+            if r.rule in WEAK_RULES and tok_labels and len(rp.spans) > 1 \
+                    and _model_says_o(rp, r, tok_labels, tok_probs, policy.get("tau_veto", 1.01)):
+                # (never veto the only thing parsed: a lone «Абая» is a street, not an empty address)
                 rp.flags.append(f"arb_{f.lower()}_model_veto")
                 continue
             final[f] = r
             rp.flags.append(f"arb_{f.lower()}_rule_only")
         elif m and not r:
-            if m.prob >= policy["tau_solo"] and _ok(rp, f, m.start, m.end):
+            bspan = rp.meta.get("house_building_span")
+            if not ignore_rules and bspan and m.start <= bspan[0] and bspan[1] <= m.end:
+                rp.flags.append(f"arb_{f.lower()}_model_rejected")      # «42 үй 2 корпус»: «2» is the корпус
+            elif m.prob >= policy["tau_solo"] and _ok(rp, f, m.start, m.end) \
+                    and (ignore_rules or not _swallows_keyword(rp, f, m.start, m.end, None, known_word)):
                 final[f] = Span(f, m.start, m.end, "model", m.prob)
                 rp.flags.append(f"arb_{f.lower()}_model_only")
             else:
                 rp.flags.append(f"arb_{f.lower()}_model_rejected")
         elif r and m:
+            if r.rule in GAZETTEER_RULES:
+                final[f] = r
+                rp.flags.append(f"arb_{f.lower()}_rule_wins")
+                continue
+            if f == "PROVINCE" and r.rule == "province_table" and r.start <= m.start and m.end <= r.end:
+                final[f] = r                          # «Almaty obl»: the table match is longer than the model's «Almaty»
+                rp.flags.append(f"arb_{f.lower()}_rule_wins")
+                continue
             keyword_bound = r.rule in KEYWORD_RULES
             weak = r.rule in WEAK_RULES
             threshold = policy["tau_override"] if keyword_bound else (min(tau, policy.get("tau_weak", tau)) if weak else tau)
-            if m.prob >= threshold and _ok(rp, f, m.start, m.end):
+            if m.prob >= threshold and _ok(rp, f, m.start, m.end) and not _swallows_keyword(rp, f, m.start, m.end, r, known_word):
                 final[f] = Span(f, m.start, m.end, "model", m.prob)
                 rp.flags.append(f"arb_{f.lower()}_model_wins")
             else:
@@ -162,6 +208,9 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
 
     def anchored(sp: Span) -> bool:
         rule = sp.rule[6:] if sp.rule.startswith("agree:") else sp.rule
+        if rule == "province_table" and any(sp.start <= a and b <= sp.end and (a, b) != (sp.start, sp.end)
+                                            for a, b in model_offsets):
+            return True                                # «Almaty obl» (table) beats the model's city «Almaty» inside it
         return rule in ANCHORED_RULES and (sp.start, sp.end) in model_offsets
 
     accepted = sorted(final.values(), key=lambda s: (not anchored(s), -s.score))
