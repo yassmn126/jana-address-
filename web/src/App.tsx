@@ -3,7 +3,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { Conflicts } from "./pages/Conflicts";
 import { Dashboard } from "./pages/Dashboard";
 import { NotFound } from "./pages/NotFound";
-import { QuickTest } from "./pages/QuickTest";
+import { Parse } from "./pages/Parse";
 import { Records } from "./pages/Records";
 import { LEGACY_HASH, PATHS } from "./routes";
 
@@ -21,7 +21,7 @@ export default function App() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="records/:id?" element={<Records />} />
         <Route path="conflicts/:id?" element={<Conflicts />} />
-        <Route path="parse" element={<QuickTest />} />
+        <Route path="parse" element={<Parse />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

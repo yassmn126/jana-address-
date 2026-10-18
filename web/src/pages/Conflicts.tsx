@@ -4,23 +4,18 @@ import { listConflicts, resolveConflict, scanConflicts } from "../api";
 import { Drawer } from "../components/Drawer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Mascot } from "../components/Mascot";
-import { SearchField, Segmented, TableCard } from "../components/table";
+import { DEFAULT_PAGE_SIZE, FilterChip, PAGE_SIZES, Pagination, SearchField, Segmented, TableCard } from "../components/table";
 import { Chip, ConfChip, IconCheck, IconChevronRight, IconCompare, IconText, type ChipStatus } from "../components/ui";
 import { ADDRESSES, count, fmtInt, fmtScore, fmtWhen } from "../format";
+import { PROVIDERS, saveProvider, savedProvider } from "../lib/ai";
 import { useAssistant } from "../state/assistant";
 import { useService } from "../state/service";
 import { useSession } from "../state/session";
+import { REVIEW_THRESHOLD } from "../stats";
 import {
   FIELDS, FIELD_LABELS,
-  type Conflict, type ConflictCounts, type ConflictReason, type ConflictStatus, type Decision, type Field, type ScanResult, type Side,
+  type Conflict, type ConflictCounts, type ConflictReason, type ConflictStatus, type Decision, type Field, type RecordOut, type ScanResult, type Side,
 } from "../types";
-
-/** The external labelers of eval/llm_verify.py (training/label_llm.py PROVIDERS). */
-const PROVIDERS = [
-  { id: "openai-compatible", label: "Локальный LLM", model: "" },
-  { id: "rules", label: "Только правила", model: "rules" },
-];
-const PROVIDER_KEY = "jana-address/conflicts/provider";
 
 const REASON: Record<ConflictReason, { label: string; status: ChipStatus }> = {
   disagreement: { label: "расхождение", status: "flag" },
@@ -47,6 +42,10 @@ export function Conflicts() {
   const [sp, setSp] = useSearchParams();
   const status = (STATUSES.includes(sp.get("status") as ConflictStatus) ? sp.get("status") : "pending") as ConflictStatus;
   const q = sp.get("q") ?? "";
+  const reasonF = sp.get("reason") ?? "";
+  const fieldF = sp.get("field") ?? "";
+  const sizeParam = Number(sp.get("size"));
+  const size = (PAGE_SIZES as readonly number[]).includes(sizeParam) ? sizeParam : DEFAULT_PAGE_SIZE;
 
   const [items, setItems] = useState<Conflict[]>([]);
   const [counts, setCounts] = useState<ConflictCounts>({ pending: 0, resolved: 0, dismissed: 0 });
@@ -77,20 +76,40 @@ export function Conflicts() {
   const setParam = (patch: Record<string, string | null>) => setSp((prev) => {
     const n = new URLSearchParams(prev);
     for (const [k, v] of Object.entries(patch)) { if (!v || (k === "status" && v === "pending")) n.delete(k); else n.set(k, v); }
+    if (!("page" in patch)) n.delete("page");
     return n;
   }, { replace: true });
 
+  const facets = useMemo(() => {
+    const reasons = new Map<ConflictReason, number>();
+    const fields = new Map<Field, number>();
+    for (const c of items) {
+      for (const r of c.reasons) reasons.set(r, (reasons.get(r) ?? 0) + 1);
+      for (const f of c.disagreements) fields.set(f, (fields.get(f) ?? 0) + 1);
+    }
+    return { reasons: [...reasons.entries()].sort((a, b) => b[1] - a[1]), fields: [...fields.entries()].sort((a, b) => b[1] - a[1]) };
+  }, [items]);
+
   const list = useMemo(() => {
-    if (!q) return items;
     const s = q.toLowerCase();
-    return items.filter((c) => c.raw_address.toLowerCase().includes(s) || c.record_id.toLowerCase().includes(s));
-  }, [items, q]);
+    return items.filter((c) =>
+      (!s || c.raw_address.toLowerCase().includes(s) || c.record_id.toLowerCase().includes(s))
+      && (!reasonF || c.reasons.includes(reasonF as ConflictReason))
+      && (!fieldF || c.disagreements.includes(fieldF as Field)));
+  }, [items, q, reasonF, fieldF]);
+  const pages = Math.max(1, Math.ceil(list.length / size));
+  const page = Math.min(Math.max(0, Number(sp.get("page")) || 0), pages - 1);
+  const pageItems = list.slice(page * size, (page + 1) * size);
 
   const selected = id ? items.find((c) => c.conflict_id === id) ?? null : null;
   const idx = selected ? list.findIndex((c) => c.conflict_id === selected.conflict_id) : -1;
   const open = useCallback((cid: string | null) => {
     navigate({ pathname: cid ? conflictPath(cid) : "/conflicts", search }, { replace: !!id && !!cid });
   }, [navigate, search, id]);
+
+  useEffect(() => {
+    if (idx >= 0 && Math.floor(idx / size) !== page) { const want = Math.floor(idx / size); setParam({ page: want ? String(want) : null }); }
+  }, [idx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------- decide, then move to the next pending conflict
   const decide = useCallback(async (c: Conflict, decision: Decision) => {
@@ -139,8 +158,22 @@ export function Conflicts() {
               <div className="toolbar-right">
                 <SearchField value={q} onChange={(v) => setParam({ q: v })} label="Адрес или ID" />
               </div>
+              {(facets.reasons.length > 1 || facets.fields.length > 1) && (
+                <div className="quick-filters">
+                  {facets.reasons.length > 1 && facets.reasons.map(([r, n]) => (
+                    <FilterChip key={r} on={reasonF === r} n={n} onClick={() => setParam({ reason: reasonF === r ? null : r })}>{REASON[r].label}</FilterChip>
+                  ))}
+                  {facets.reasons.length > 1 && facets.fields.length > 1 && <span className="qf-sep" />}
+                  {facets.fields.length > 1 && facets.fields.map(([f, n]) => (
+                    <FilterChip key={f} on={fieldF === f} n={n} onClick={() => setParam({ field: fieldF === f ? null : f })}>{FIELD_LABELS[f]}</FilterChip>
+                  ))}
+                </div>
+              )}
             </>
           }
+          footer={list.length > DEFAULT_PAGE_SIZE || size !== DEFAULT_PAGE_SIZE
+            ? <Pagination page={page} total={list.length} size={size} onPage={(n) => setParam({ page: n ? String(n) : null })} onSize={(n) => setParam({ size: n === DEFAULT_PAGE_SIZE ? null : String(n) })} />
+            : null}
         >
           <div className="table-scroll">
             <table className="dtable">
@@ -155,7 +188,7 @@ export function Conflicts() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((c) => (
+                {pageItems.map((c) => (
                   <tr key={c.conflict_id} className={c.conflict_id === selected?.conflict_id ? "is-selected" : ""} tabIndex={0}
                     onClick={() => open(c.conflict_id)} onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) open(c.conflict_id); }}>
                     <td className="cell-main">
@@ -186,7 +219,7 @@ export function Conflicts() {
                 {loading ? <p className="muted">Загрузка…</p> : (
                   <>
                     <Mascot pose={status === "pending" && !q ? "celebrating" : "magnifier"} className="table-empty-mascot" />
-                    <p>{q ? "Нет конфликтов по запросу" : status === "pending" ? "Нет конфликтов, ждущих решения" : status === "resolved" ? "Решённых конфликтов нет" : "Отклонённых конфликтов нет"}</p>
+                    <p>{q || reasonF || fieldF ? "Нет конфликтов по фильтру" : status === "pending" ? "Нет конфликтов, ждущих решения" : status === "resolved" ? "Решённых конфликтов нет" : "Отклонённых конфликтов нет"}</p>
                   </>
                 )}
               </div>
@@ -214,11 +247,8 @@ export function Conflicts() {
 function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) => void; rowsCount: number }) {
   const { react } = useAssistant();
   const { rows } = useSession();
-  const [provider, setProvider] = useState(() => {
-    try { const v = localStorage.getItem(PROVIDER_KEY); if (PROVIDERS.some((p) => p.id === v)) return v as string; } catch { /* storage blocked */ }
-    return PROVIDERS[0].id;
-  });
-  const [model, setModel] = useState(() => PROVIDERS.find((p) => p.id === provider)?.model ?? "");
+  const [provider, setProvider] = useState(() => savedProvider().provider);
+  const [model, setModel] = useState(() => savedProvider().model);
   const [pasting, setPasting] = useState(false);
   const [paste, setPaste] = useState("");
   const [scanning, setScanning] = useState<string | null>(null);
@@ -226,9 +256,10 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
   const [error, setError] = useState<string | null>(null);
 
   const choose = (pid: string) => {
+    const m = PROVIDERS.find((p) => p.id === pid)?.model ?? "";
     setProvider(pid);
-    setModel(PROVIDERS.find((p) => p.id === pid)?.model ?? "");
-    try { localStorage.setItem(PROVIDER_KEY, pid); } catch { /* storage blocked */ }
+    setModel(m);
+    saveProvider(pid, m);
   };
 
   const scan = async (records: { id: string; raw_address: string }[]) => {
@@ -254,6 +285,12 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
   };
 
   const lines = paste.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const queue = rows.filter((r) => r.confidence < REVIEW_THRESHOLD && !r.reviewed);
+  const toInput = (rs: RecordOut[]) => rs.map((r) => ({ id: r.id, raw_address: r.raw_address }));
+  const scanAll = () => {
+    const calls = Math.ceil(rows.length / 50);
+    if (rows.length <= 500 || window.confirm(`Сверить ${count(rows.length, ADDRESSES)}: ${calls} запросов к ИИ. Продолжить?`)) scan(toInput(rows));
+  };
 
   return (
     <section className="card scan">
@@ -271,11 +308,17 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
           </select>
           <label className="inline-field">
             <span>Модель</span>
-            <input className="mono" value={model} onChange={(e) => setModel(e.target.value)} spellCheck={false} title="Имя модели на сервере" />
+            <input className="mono" value={model} onChange={(e) => { setModel(e.target.value); saveProvider(provider, e.target.value); }} spellCheck={false} title="Имя модели на сервере" />
           </label>
           <button type="button" className="btn btn-ghost" onClick={() => setPasting((v) => !v)} aria-expanded={pasting}><IconText />Список</button>
-          <button type="button" className="btn btn-primary" onClick={() => scan(rows.map((r) => ({ id: r.id, raw_address: r.raw_address })))} disabled={!!scanning || !rowsCount}>
-            {scanning ? `Сверяю ${scanning}` : rowsCount ? `Сверить ${count(rowsCount, ADDRESSES)}` : "Нет записей в сессии"}
+          {queue.length > 0 && queue.length < rowsCount && (
+            <button type="button" className="btn btn-ghost" onClick={scanAll} disabled={!!scanning}>Все {fmtInt(rowsCount)}</button>
+          )}
+          <button type="button" className="btn btn-primary" onClick={() => scan(toInput(queue.length ? queue : rows))} disabled={!!scanning || !rowsCount}>
+            {scanning ? `Сверяю ${scanning}`
+              : !rowsCount ? "Нет записей в сессии"
+              : queue.length ? `Сверить очередь · ${fmtInt(queue.length)}`
+              : `Сверить ${count(rowsCount, ADDRESSES)}`}
           </button>
         </div>
       </div>

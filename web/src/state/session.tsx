@@ -7,11 +7,13 @@ import { computeStats, REVIEW_THRESHOLD, type Stats } from "../stats";
 import { FIELDS, JURY_KEYS, type Field, type RecordOut } from "../types";
 import { useAssistant } from "./assistant";
 import { useService } from "./service";
+import { deleteValue, loadValue, saveValue } from "./storage";
 
 type Input = { id: string; raw_address: string };
 
-/** The operator's working set: the parsed records of this browser tab, their edits and the review progress. */
+/** The operator's working set: the parsed records, their edits and the review progress. */
 interface SessionCtx {
+  ready: boolean;                // the saved session has been restored (or there was none)
   rows: RecordOut[];
   stats: Stats;
   busy: boolean;
@@ -27,35 +29,44 @@ interface SessionCtx {
   update: (id: string, field: Field, value: string | null) => void;
   revert: (id: string) => void;
   accept: (r: RecordOut) => Promise<boolean>;
-  exportJson: () => void;
+  acceptMany: (ids: string[]) => Promise<number>;
+  exportJson: (ids?: string[]) => void;
   clear: () => void;
   showQueue: () => void;
 }
 
 const Ctx = createContext<SessionCtx | null>(null);
 
-/** Records are kept in sessionStorage so a reload on /records does not lose the file. Best effort: quota or privacy mode just skip it. */
-const STORE_KEY = "jana-address/session/v1";
+/** The session lives in IndexedDB (state/storage.ts), so a reload or a new tab keeps the file. */
+const SAVE_KEY = "current";
+const LEGACY_KEY = "jana-address/session/v1";       // sessionStorage copy of the first redesign build
 const CHUNK = 1000;
+type Saved = { rows: RecordOut[]; lastRun: SessionCtx["lastRun"] };
 
-function restore(): { rows: RecordOut[]; lastRun: SessionCtx["lastRun"] } {
+/** One shared promise: StrictMode runs effects twice, and the legacy copy can be read only once. */
+let restoring: Promise<Saved | null> | null = null;
+const restore = () => (restoring ??= readSaved());
+
+async function readSaved(): Promise<Saved | null> {
   try {
-    const raw = sessionStorage.getItem(STORE_KEY);
-    if (raw) {
-      const s = JSON.parse(raw);
+    const legacy = sessionStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      sessionStorage.removeItem(LEGACY_KEY);
+      const s = JSON.parse(legacy);
       if (Array.isArray(s.rows)) return { rows: s.rows, lastRun: s.lastRun ?? null };
     }
   } catch { /* storage blocked or corrupt */ }
-  return { rows: [], lastRun: null };
+  const saved = await loadValue<Saved>(SAVE_KEY);
+  return saved && Array.isArray(saved.rows) ? saved : null;
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { react } = useAssistant();
   const { refreshArchive } = useService();
-  const initial = useRef(restore());
-  const [rows, setRows] = useState<RecordOut[]>(initial.current.rows);
-  const [lastRun, setLastRun] = useState<SessionCtx["lastRun"]>(initial.current.lastRun);
+  const [ready, setReady] = useState(false);
+  const [rows, setRows] = useState<RecordOut[]>([]);
+  const [lastRun, setLastRun] = useState<SessionCtx["lastRun"]>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<SessionCtx["progress"]>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,14 +74,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   rowsRef.current = rows;
 
   useEffect(() => {
+    let alive = true;
+    restore().then((saved) => {
+      if (!alive) return;
+      if (saved && !rowsRef.current.length) { setRows(saved.rows); setLastRun(saved.lastRun); }
+      setReady(true);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
     const t = window.setTimeout(() => {
-      try {
-        if (rows.length) sessionStorage.setItem(STORE_KEY, JSON.stringify({ rows, lastRun }));
-        else sessionStorage.removeItem(STORE_KEY);
-      } catch { /* over quota: the session simply is not restored after a reload */ }
-    }, 400);
+      if (rows.length) saveValue(SAVE_KEY, { rows, lastRun });
+      else deleteValue(SAVE_KEY);
+    }, 600);
     return () => window.clearTimeout(t);
-  }, [rows, lastRun]);
+  }, [rows, lastRun, ready]);
 
   const stats = useMemo(() => computeStats(rows), [rows]);
 
@@ -164,8 +184,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [react]);
 
-  const exportJson = useCallback(() => {
-    const out = rows.map((r) => Object.fromEntries(JURY_KEYS.map((k) => [k, r[k as keyof RecordOut] ?? null])));
+  /** Accept several records at once; edited ones still send their correction first. Returns how many were accepted. */
+  const acceptMany = useCallback(async (ids: string[]) => {
+    const want = new Set(ids);
+    const targets = rowsRef.current.filter((r) => want.has(r.id) && !r.reviewed);
+    const done = new Set<string>();
+    for (const r of targets) {
+      try {
+        if (r.edited) await sendCorrection(r, Object.fromEntries(FIELDS.map((f) => [f, r[f]])) as Record<string, string | null>);
+        done.add(r.id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    }
+    setRows((rs) => rs.map((x) => (done.has(x.id) ? { ...x, reviewed: true } : x)));
+    if (done.size) react("happy", `Принято: ${count(done.size, RECORDS)}.`, undefined, 3500);
+    return done.size;
+  }, [react]);
+
+  const exportJson = useCallback((ids?: string[]) => {
+    const pick = ids ? new Set(ids) : null;
+    const out = (pick ? rows.filter((r) => pick.has(r.id)) : rows).map((r) => Object.fromEntries(JURY_KEYS.map((k) => [k, r[k as keyof RecordOut] ?? null])));
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -178,9 +217,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const clear = useCallback(() => { setRows([]); setLastRun(null); setError(null); }, []);
 
   const value = useMemo<SessionCtx>(() => ({
-    rows, stats, busy, progress, error, setError, lastRun,
-    load, loadFile, loadText, parseOne, addRow, update, revert, accept, exportJson, clear, showQueue,
-  }), [rows, stats, busy, progress, error, lastRun, load, loadFile, loadText, parseOne, addRow, update, revert, accept, exportJson, clear, showQueue]);
+    ready, rows, stats, busy, progress, error, setError, lastRun,
+    load, loadFile, loadText, parseOne, addRow, update, revert, accept, acceptMany, exportJson, clear, showQueue,
+  }), [ready, rows, stats, busy, progress, error, lastRun, load, loadFile, loadText, parseOne, addRow, update, revert, accept, acceptMany, exportJson, clear, showQueue]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

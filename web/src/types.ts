@@ -23,6 +23,7 @@ export interface RecordOut {
   // explain mode
   spans?: Span[]; tokens?: Token[]; flags?: string[]; provenance?: Record<string, string | null>;
   field_confidence?: Partial<Record<Field, number>>;
+  model_probs?: Record<string, number>;
   geo?: Geo | null;
   // UI state
   edited?: boolean; reviewed?: boolean;

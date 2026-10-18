@@ -56,21 +56,60 @@ export function SortHeader({ label, dir, onChange, className = "" }: { label: st
   );
 }
 
-export const PAGE_SIZE = 50;
+export const PAGE_SIZES = [25, 50, 100, 200] as const;
+export const DEFAULT_PAGE_SIZE = 50;
 
-/** «1–50 из 416» and prev / next. */
-export function Pagination({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const from = total ? page * PAGE_SIZE + 1 : 0;
-  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+/** Page numbers with gaps: 1 … 4 5 [6] 7 8 … 120 */
+function pageList(page: number, pages: number): (number | "gap")[] {
+  const out: (number | "gap")[] = [];
+  const add = (n: number) => { if (n >= 0 && n < pages && !out.includes(n)) out.push(n); };
+  add(0);
+  if (page > 3) out.push("gap");
+  for (let n = page - 2; n <= page + 2; n++) add(n);
+  if (page < pages - 4) out.push("gap");
+  add(pages - 1);
+  return out;
+}
+
+/** «51–100 из 12 340», page size, numbered pages, prev / next. */
+export function Pagination({ page, total, size, onPage, onSize }: {
+  page: number;
+  total: number;
+  size: number;
+  onPage: (p: number) => void;
+  onSize: (s: number) => void;
+}) {
+  const pages = Math.max(1, Math.ceil(total / size));
+  const from = total ? page * size + 1 : 0;
+  const to = Math.min(total, (page + 1) * size);
   return (
     <div className="pager">
       <span className="pager-range">{fmtInt(from)}–{fmtInt(to)} из {fmtInt(total)}</span>
-      <div className="pager-btns">
-        <button type="button" className="icon-btn is-round" onClick={() => onPage(page - 1)} disabled={page <= 0} aria-label="Предыдущая страница"><IconChevronLeft /></button>
-        <button type="button" className="icon-btn is-round" onClick={() => onPage(page + 1)} disabled={page >= pages - 1} aria-label="Следующая страница"><IconChevronRight /></button>
-      </div>
+      <label className="pager-size">
+        <span>по</span>
+        <select value={size} onChange={(e) => onSize(Number(e.target.value))} aria-label="Строк на странице">
+          {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </label>
+      {pages > 1 && (
+        <nav className="pager-btns" aria-label="Страницы">
+          <button type="button" className="icon-btn is-round" onClick={() => onPage(page - 1)} disabled={page <= 0} aria-label="Предыдущая страница"><IconChevronLeft /></button>
+          {pageList(page, pages).map((n, i) => n === "gap"
+            ? <span key={`g${i}`} className="pager-gap">…</span>
+            : <button key={n} type="button" className={`pager-num ${n === page ? "is-active" : ""}`} onClick={() => onPage(n)} aria-current={n === page ? "page" : undefined}>{fmtInt(n + 1)}</button>)}
+          <button type="button" className="icon-btn is-round" onClick={() => onPage(page + 1)} disabled={page >= pages - 1} aria-label="Следующая страница"><IconChevronRight /></button>
+        </nav>
+      )}
     </div>
+  );
+}
+
+/** Toggle chip with a count, for filter panels. */
+export function FilterChip({ on, onClick, children, n }: { on: boolean; onClick: () => void; children: ReactNode; n?: number }) {
+  return (
+    <button type="button" className={`fchip ${on ? "is-on" : ""}`} onClick={onClick} aria-pressed={on}>
+      {children}{n != null && <span className="fchip-n">{fmtInt(n)}</span>}
+    </button>
   );
 }
 

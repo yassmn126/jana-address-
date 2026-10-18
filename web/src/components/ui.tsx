@@ -120,41 +120,6 @@ export function Highlighted({ r }: { r: RecordOut }) {
   return <>{parts}</>;
 }
 
-/** Explain block shared by the records panel and the single-line parse result. */
-export function ExplainDetails({ r, fieldLabels }: { r: RecordOut; fieldLabels: Record<string, string> }) {
-  const filled = Object.keys(fieldLabels).filter((f) => r[f as keyof RecordOut]);
-  return (
-    <>
-      <h4>Токены</h4>
-      <div className="tokens">
-        {r.tokens?.length
-          ? r.tokens.map((t, i) => (
-              <span key={i} className={`tok ${t.label ? SPAN_CLASS[t.label] ?? "sp-o" : ""}`} title={`${t.kind}${t.role ? " · " + t.role : ""}${t.label ? " → " + t.label : ""}`}>{t.text}</span>
-            ))
-          : <span className="muted">нет</span>}
-      </div>
-      <h4>Флаги</h4>
-      <div className="tokens">
-        {r.flags?.length ? r.flags.map((f) => <Chip key={f} status="warn">{f}</Chip>) : <span className="muted">нет</span>}
-      </div>
-      <h4>Источник значений</h4>
-      <ul className="prov">
-        {filled.length
-          ? filled.map((f) => (
-              <li key={f}><b>{fieldLabels[f]}</b> {String(r[f as keyof RecordOut])} <span className="muted mono">{r.provenance?.[f] ?? "?"}</span></li>
-            ))
-          : <li className="muted">нет</li>}
-      </ul>
-      {r.spans?.length ? (
-        <>
-          <h4>Правила</h4>
-          <ul className="prov">{r.spans.map((s) => <li key={s.field + s.start}><b>{s.field}</b> «{s.text}» <span className="muted mono">{s.rule} · {s.score}</span></li>)}</ul>
-        </>
-      ) : null}
-    </>
-  );
-}
-
 /* Inline icons (stroke = currentColor). */
 const I = ({ d, size = 18 }: { d: ReactNode; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
@@ -177,6 +142,10 @@ export const IconSort = () => <I size={13} d={<><path d="m7 9 5-5 5 5" /><path d
 export const IconExternal = () => <I size={14} d={<><path d="M14 4h6v6" /><path d="M20 4 10 14" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>} />;
 export const IconUndo = () => <I size={16} d={<><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></>} />;
 export const IconMapPin = () => <I size={16} d={<><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z" /><circle cx="12" cy="9.5" r="2.5" /></>} />;
+export const IconPanel = () => <I size={18} d={<><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16" /></>} />;
+export const IconTrash = () => <I size={16} d={<><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" /><path d="M9 7V4h6v3" /></>} />;
+export const IconFilter = () => <I size={16} d={<path d="M4 5h16l-6 7.5V19l-4 1.5v-8L4 5Z" />} />;
+export const IconInfo = () => <I size={14} d={<><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 8h.01" /></>} />;
 export const IconSparkle = () => <I size={16} d={<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" />} />;
 export const IconClose = () => <I size={16} d={<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>} />;
 export const IconText = () => <I d={<><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h10" /></>} />;

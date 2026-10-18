@@ -107,7 +107,7 @@ function NextStep() {
     actions = (
       <>
         <button type="button" className="btn btn-primary" onClick={s.showQueue}>Открыть очередь<IconArrowRight /></button>
-        <button type="button" className="btn btn-ghost" onClick={s.exportJson}><IconDownload />output.json</button>
+        <button type="button" className="btn btn-ghost" onClick={() => s.exportJson()}><IconDownload />output.json</button>
       </>
     );
   } else {
@@ -119,7 +119,7 @@ function NextStep() {
       : "Все записи выше порога 0,70, ручная проверка не нужна.";
     actions = (
       <>
-        <button type="button" className="btn btn-primary" onClick={s.exportJson}><IconDownload />Скачать output.json</button>
+        <button type="button" className="btn btn-primary" onClick={() => s.exportJson()}><IconDownload />Скачать output.json</button>
         <FileButton onFile={s.loadFile} className="btn btn-ghost"><IconUpload />Новый файл</FileButton>
       </>
     );

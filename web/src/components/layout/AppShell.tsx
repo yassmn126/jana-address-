@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { fmtInt } from "../../format";
 import { useAssistant } from "../../state/assistant";
@@ -7,14 +7,36 @@ import { Mascot, MOOD_LABEL } from "../Mascot";
 import { IconClose } from "../ui";
 import { Sidebar } from "./Sidebar";
 
+const COLLAPSE_KEY = "jana-address/sidebar-collapsed";
+
 export function AppShell() {
   const { pathname } = useLocation();
-  useEffect(() => { window.scrollTo({ top: 0 }); }, [pathname]);
+  const section = pathname.split("/")[1];
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [section]);
+
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
+  });
+  const toggle = useCallback(() => setCollapsed((c) => {
+    try { localStorage.setItem(COLLAPSE_KEY, c ? "0" : "1"); } catch { /* storage blocked */ }
+    return !c;
+  }), []);
+  useEffect(() => {
+    const h = (ev: KeyboardEvent) => {
+      const el = ev.target as HTMLElement;
+      if (ev.key !== "[" || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      if (el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || el?.tagName === "SELECT" || el?.isContentEditable) return;
+      ev.preventDefault();
+      toggle();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [toggle]);
 
   return (
-    <div className="app">
-      <Sidebar />
-      <main className="main" key={pathname.split("/")[1]}>
+    <div className={`app ${collapsed ? "is-collapsed" : ""}`}>
+      <Sidebar collapsed={collapsed} onToggle={toggle} />
+      <main className="main" key={section}>
         <Outlet />
       </main>
       <AssistantToast />
