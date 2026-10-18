@@ -1,4 +1,4 @@
-import type { Conflict, ConflictCounts, ConflictList, ConflictStatus, Decision, RecordOut, ScanResult } from "./types";
+import type { Conflict, ConflictCounts, ConflictList, ConflictStatus, Decision, RecordOut, Run, RunStats, ScanResult, VersionInfo } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -56,3 +56,11 @@ export async function health(): Promise<{ status: string }> {
   const r = await fetch(`${BASE}/health`);
   return r.json();
 }
+
+export const getVersion = (): Promise<VersionInfo> => fetch(`${BASE}/version`).then((r) => json<VersionInfo>(r));
+
+// ---------------------------------------------------------------- run archive (every batch the API parsed, kept in SQLite)
+export const listRuns = (limit = 8): Promise<Run[]> =>
+  fetch(`${BASE}/api/v1/runs?limit=${limit}`).then((r) => json<Run[]>(r));
+
+export const getRunStats = (): Promise<RunStats> => fetch(`${BASE}/api/v1/runs/stats`).then((r) => json<RunStats>(r));

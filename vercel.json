@@ -3,5 +3,11 @@
   "framework": null,
   "installCommand": "cd web && npm ci",
   "buildCommand": "cd web && VITE_API_BASE=https://jana-address-api.onrender.com npm run build",
-  "outputDirectory": "web/dist"
+  "outputDirectory": "web/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }

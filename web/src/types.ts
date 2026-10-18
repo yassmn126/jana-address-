@@ -72,6 +72,44 @@ export interface Decision {
   note?: string;
 }
 
+/* ---------- Run archive (GET /api/v1/runs*) and service info (GET /version) ---------- */
+/** Geocoder precision, most to least exact (api/jana_address/gazetteer/osm.py · geocode). */
+export const PRECISIONS = ["house", "house_near", "street", "microdistrict", "district", "locality", "none"] as const;
+export type Precision = (typeof PRECISIONS)[number];
+export const PRECISION_LABELS: Record<Precision, string> = {
+  house: "Дом", house_near: "Дом без корпуса", street: "Улица", microdistrict: "Микрорайон",
+  district: "Район", locality: "Нас. пункт", none: "Не найден",
+};
+
+export interface Run {
+  id: number;
+  time: string;                 // server local time, "YYYY-MM-DDTHH:MM:SS"
+  source: string;               // "batch" · "single" · "file:<name>"
+  records: number;
+  elapsed_ms: number | null;
+  mean_confidence: number | null;
+  in_database: number;          // records geocoded to a building
+  in_database_share: number | null;
+  by_precision: Partial<Record<Precision, number>>;
+  version: string;
+}
+export interface RunStats {
+  runs: number;
+  records: number;
+  in_database?: number;
+  in_database_share?: number | null;
+  by_precision?: Partial<Record<Precision, number>>;
+  mean_confidence?: number | null;
+  disabled?: boolean;
+}
+export interface VersionInfo {
+  version: string;
+  components: {
+    rules?: string; model?: string; mode?: string; gazetteer?: string;
+    gazetteer_stats?: { settlements?: number; streets?: number; houses?: number; house_points?: number };
+  };
+}
+
 /** Colors per field for span highlighting (CSS classes in styles.css). */
 export const SPAN_CLASS: Record<string, string> = {
   PROVINCE: "sp-province", CITY: "sp-city", DISTRICT: "sp-district", LIVING_AREA: "sp-living",

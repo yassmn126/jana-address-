@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { listConflicts, resolveConflict, scanConflicts } from "../api";
-import { MascotAssistant, type MascotState, type Mood } from "../components/Mascot";
+import { PageHeader } from "../components/layout/PageHeader";
+import { useAssistant } from "../state/assistant";
+import { useService } from "../state/service";
+import { useSession } from "../state/session";
 import { Chip, IconCheck, IconCompare, type ChipStatus } from "../components/ui";
 import {
   FIELDS, FIELD_LABELS,
-  type Conflict, type ConflictCounts, type ConflictReason, type ConflictStatus, type Decision, type Field, type RecordOut, type ScanResult, type Side,
+  type Conflict, type ConflictCounts, type ConflictReason, type ConflictStatus, type Decision, type Field, type ScanResult, type Side,
 } from "../types";
 
 /** The "external AI" options of eval/llm_verify.py (training/label_llm.py PROVIDERS). */
@@ -33,12 +36,10 @@ const Value = ({ v }: { v: string | null | undefined }) => (v ? <>{v}</> : <span
 type Picks = Partial<Record<Field, Side>>;
 type Overrides = Partial<Record<Field, string>>;
 
-export function Conflicts({ reaction, react, rows, onCounts }: {
-  reaction: MascotState | null;
-  react: (mood: Mood, text: string, action?: MascotState["action"], ms?: number) => void;
-  rows: RecordOut[];
-  onCounts: (c: ConflictCounts) => void;
-}) {
+export function Conflicts() {
+  const { react } = useAssistant();
+  const { setConflictsPending } = useService();
+  const { rows } = useSession();
   const [status, setStatus] = useState<ConflictStatus>("pending");
   const [items, setItems] = useState<Conflict[]>([]);
   const [counts, setCounts] = useState<ConflictCounts>({ pending: 0, resolved: 0, dismissed: 0 });
@@ -56,7 +57,7 @@ export function Conflicts({ reaction, react, rows, onCounts }: {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const applyCounts = useCallback((c: ConflictCounts) => { setCounts(c); onCounts(c); }, [onCounts]);
+  const applyCounts = useCallback((c: ConflictCounts) => { setCounts(c); setConflictsPending(c.pending); }, [setConflictsPending]);
 
   const load = useCallback(async (s: ConflictStatus) => {
     setLoading(true);
@@ -103,7 +104,7 @@ export function Conflicts({ reaction, react, rows, onCounts }: {
     } catch (e) {
       const msg = String(e instanceof Error ? e.message : e);
       setError(msg);
-      react("confused", "Не получилось сравнить с ИИ — подробности в красной плашке.");
+      react("error", "Сравнение с ИИ не выполнено.");
     } finally {
       setScanning(null);
     }
@@ -128,7 +129,7 @@ export function Conflicts({ reaction, react, rows, onCounts }: {
       else react("happy", `${what}. Осталось решить: ${left}.`, undefined, 3500);
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
-      react("confused", "Не получилось сохранить решение.");
+      react("error", "Решение не сохранено.");
     } finally {
       setBusyId(null);
     }
@@ -159,21 +160,12 @@ export function Conflicts({ reaction, react, rows, onCounts }: {
     return () => window.removeEventListener("keydown", h);
   }, [status, items, activeId, busyId, decide]);
 
-  const mascot: MascotState = reaction ?? (
-    error ? { mood: "confused", text: "Что-то пошло не так — подробности в красной плашке." }
-    : counts.pending ? { mood: "idle", text: `Конфликтов ждут решения: ${counts.pending}. Сравните и выберите вариант в один клик.` }
-    : { mood: "idle", text: "Конфликтов нет. Проверьте записи через ИИ — расхождения появятся здесь." });
   const prov = PROVIDERS.find((p) => p.id === provider);
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <p className="eyebrow">Human-in-the-loop · конфликты</p>
-          <h1 className="title"><span className="dim">Локальная модель против ИИ.</span><br />Решает человек — в один клик.</h1>
-        </div>
-        <MascotAssistant state={mascot} />
-      </div>
+    <>
+      <PageHeader title="Конфликты" meta={`ждут решения: ${counts.pending} · решены: ${counts.resolved} · отклонены: ${counts.dismissed}`} />
+      <div className="content">
 
       {/* Scan: compare the local parser with the AI labeler and queue what needs a human */}
       <section className="card scan">
@@ -250,7 +242,8 @@ export function Conflicts({ reaction, react, rows, onCounts }: {
             ))}
           </div>
         )}
-    </div>
+      </div>
+    </>
   );
 }
 
