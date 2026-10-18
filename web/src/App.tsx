@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { health, parseBatch, sendCorrection } from "./api";
-import { FIELDS, JURY_KEYS, type Field, type RecordOut } from "./types";
+import { health, listConflicts, parseBatch, sendCorrection } from "./api";
+import { FIELDS, JURY_KEYS, type ConflictCounts, type Field, type RecordOut } from "./types";
 import { computeStats, REVIEW_THRESHOLD } from "./stats";
 import { Navbar, PAGES, type Page } from "./components/Navbar";
 import { Mascot, type MascotState, type Mood } from "./components/Mascot";
 import { Dashboard } from "./pages/Dashboard";
 import { Batch, type SortKey } from "./pages/Batch";
 import { QuickTest } from "./pages/QuickTest";
+import { Conflicts } from "./pages/Conflicts";
 
 /** Hotkeys for click-to-relabel: select text inside the raw string, press a key. */
 const HOTKEYS: Record<string, Field> = {
@@ -39,6 +40,7 @@ export default function App() {
   const [paste, setPaste] = useState("");
   const [lastRun, setLastRun] = useState<{ ms: number; count: number } | null>(null);
   const [reaction, setReaction] = useState<MascotState | null>(null);
+  const [conflictsPending, setConflictsPending] = useState(0);
   const selectionRef = useRef<{ id: string; text: string } | null>(null);
   const reactTimer = useRef<number>();
   const prevApiOk = useRef<boolean | null>(null);
@@ -80,6 +82,17 @@ export default function App() {
     if (prevApiOk.current === false && apiOk) react("happy", "Проснулся! API снова на связи.");
     prevApiOk.current = apiOk;
   }, [apiOk, react]);
+
+  // ---------------------------------------------------------------- conflict queue size for the navbar badge
+  const onConflictCounts = useCallback((c: ConflictCounts) => setConflictsPending(c.pending), []);
+  useEffect(() => {
+    if (!apiOk) return;
+    let alive = true;
+    const pull = () => listConflicts("pending", 1).then((r) => alive && setConflictsPending(r.counts.pending)).catch(() => { /* older API without the queue */ });
+    pull();
+    const t = window.setInterval(pull, 20000);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [apiOk]);
 
   // ---------------------------------------------------------------- loading
   const load = useCallback(async (input: { id: string; raw_address: string }[]) => {
@@ -223,7 +236,7 @@ export default function App() {
   // ---------------------------------------------------------------- render
   return (
     <>
-      <Navbar page={page} queue={stats.queue} apiOk={apiOk} />
+      <Navbar page={page} queue={stats.queue} conflicts={conflictsPending} apiOk={apiOk} />
       <main className="shell">
         {page === "dashboard" && <Dashboard stats={stats} lastRun={lastRun} mascot={mascot} onShowQueue={showQueue} />}
         {page === "batch" && (
@@ -234,6 +247,7 @@ export default function App() {
             onFile={onFile} onPaste={onPaste} onRawMouseUp={onRawMouseUp} update={update} accept={accept} exportJson={exportJson}
           />
         )}
+        {page === "conflicts" && <Conflicts reaction={reaction} react={react} rows={rows} onCounts={onConflictCounts} />}
         {page === "quick" && <QuickTest mascot={mascot} parseOne={parseOne} onAdd={addRow} />}
         <footer className="footer">
           <span>схема · {JURY_KEYS.join(" · ")}</span>

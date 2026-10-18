@@ -179,7 +179,7 @@ def run(records: list[dict], gold_by_id: dict[str, dict], provider: str, model: 
     rows, per_field, n_dis = [], Counter(), 0
     ours_all, llm_all, gold_all = [], [], []
     for r in records:
-        ours, _ = our_fields(r["id"], r["raw_address"])
+        ours, parsed = our_fields(r["id"], r["raw_address"])
         m = llm.get(r["id"], {"_error": "missing"})
         err = m.get("_error")
         mf = {f: m.get(f) for f in FIELDS} if not err else {f: None for f in FIELDS}
@@ -197,7 +197,7 @@ def run(records: list[dict], gold_by_id: dict[str, dict], provider: str, model: 
             per_field[f] += 1
         n_dis += bool(dis)
         rows.append({"id": r["id"], "raw_address": r["raw_address"], "ours": ours, "llm": mf, "gold": g,
-                     "disagreements": dis, "issues": issues,
+                     "disagreements": dis, "issues": issues, "confidence": parsed.get("confidence"),
                      "verdicts": {f: verdict(f, ours, mf, g) for f in dis}})
     res = {"n": len(records), "records_with_disagreement": n_dis, "per_field": dict(per_field), "provider": provider,
            "model": model, "usage": usage, "seconds": round(time.time() - t0, 1)}
@@ -245,6 +245,9 @@ def main(argv=None) -> int:
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--batch-size", type=int, default=20)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--queue", help="also push disagreements / low-confidence records into this conflict queue "
+                                    "(e.g. data/conflicts.sqlite3, the file the API's /api/v1/conflicts reads)")
+    ap.add_argument("--min-confidence", type=float, default=0.7, help="our confidence below this also goes to the queue")
     a = ap.parse_args(argv)
     recs = [{"id": str(g["id"]), "raw_address": g["raw_address"]} for g in load_gold(a.input)]
     if a.limit:
@@ -278,6 +281,11 @@ def main(argv=None) -> int:
     s = result["summary"]
     print(json.dumps(s, ensure_ascii=False, indent=1))
     print(f"→ {a.out}/report.md, review_queue.jsonl, review.html")
+    if a.queue:
+        from jana_address.conflicts import ConflictStore, classify
+        items = [it for it in (classify(r, a.min_confidence) for r in result["rows"]) if it]
+        stats = ConflictStore(Path(a.queue)).upsert(items, a.provider, a.model)
+        print(f"→ conflict queue {a.queue}: {stats}")
     return 0
 
 

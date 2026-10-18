@@ -2,9 +2,9 @@
 Extra diagnostics live in `ExplainOut` (returned only with ?explain=1)."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RecordIn(BaseModel):
@@ -72,3 +72,29 @@ class Correction(BaseModel):
     fields: dict[str, Optional[str]]
     reviewer: Optional[str] = None
     note: Optional[str] = None
+
+
+_JURY_FIELDS = {"province", "city", "district", "living_area", "street_type", "street_name",
+                "house", "apartment", "entrance", "floor", "landmark"}
+
+
+class ConflictResolution(BaseModel):
+    """An operator's decision on a queued conflict (POST /api/v1/conflicts/{id}/resolve).
+
+    choice  ours | ai | custom | dismiss  — `ai` takes the AI's value for every disagreeing field;
+    picks   per-field side, applied on top of the choice: {"house": "ai", "apartment": "ours"};
+    fields  per-field typed values, applied last (null / "" = no value)."""
+    model_config = ConfigDict(extra="forbid")
+    choice: Literal["ours", "ai", "custom", "dismiss"] = "ours"
+    picks: dict[str, Literal["ours", "ai"]] = {}
+    fields: dict[str, Optional[str]] = {}
+    reviewer: Optional[str] = None
+    note: Optional[str] = None
+
+    @field_validator("picks", "fields")
+    @classmethod
+    def _known_fields(cls, v: dict) -> dict:
+        unknown = set(v) - _JURY_FIELDS
+        if unknown:
+            raise ValueError(f"unknown field(s): {sorted(unknown)}")
+        return v

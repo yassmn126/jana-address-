@@ -5,6 +5,8 @@ Jury endpoint:  POST /api/v1/parse/batch   body = [{"id","raw_address"}, ...]  (
 Also:           POST /api/v1/parse/batch/file (multipart upload), POST /api/v1/parse (single),
                 ?explain=1 on both parse endpoints (adds spans/tokens/flags/provenance),
                 POST /api/v1/corrections, GET /health, GET /version.
+Human-in-the-loop: POST /api/v1/conflicts/scan (local parser vs AI labeler → queue), GET /api/v1/conflicts,
+                GET /api/v1/conflicts/{id}, POST /api/v1/conflicts/{id}/resolve, POST /api/v1/conflicts/{id}/approve.
 """
 from __future__ import annotations
 
@@ -20,7 +22,8 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from . import __version__
-from .schemas import Correction, ExplainOut, RecordIn, RecordOut
+from .conflicts import DEFAULT_MIN_CONFIDENCE, ConflictStore, classify
+from .schemas import ConflictResolution, Correction, ExplainOut, RecordIn, RecordOut
 from .service import components, get_parser, parse_batch, parse_one
 
 DATA_DIR = Path(os.environ.get("JANA_DATA_DIR", "/data"))
@@ -135,11 +138,7 @@ def parse_single(record: RecordIn, explain: bool = Query(False)):
 @app.post("/api/v1/corrections")
 def add_correction(c: Correction) -> dict:
     """Append a manual correction (training data only; never used for inference)."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    path = DATA_DIR / "corrections.jsonl"
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps({**c.model_dump(), "ts": time.time()}, ensure_ascii=False) + "\n")
-    return {"stored": True, "path": str(path)}
+    return {"stored": True, "path": str(_store_correction(c.model_dump()))}
 
 
 @app.get("/api/v1/suggest")
@@ -159,14 +158,11 @@ def geocode(record: RecordIn) -> dict:
             "fields": {k: out[k] for k in RecordOut.model_fields if k not in ("id", "raw_address")}, "geo": out.get("geo")}
 
 
-@app.post("/api/v1/verify", response_model=None)
-def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
-                    model: str = Query("claude-opus-5-5")):
-    """AI cross-check (dev / ops tool, never part of parsing): our parse vs an LLM labeler, field-by-field diff.
+def _crosscheck(records: list[RecordIn], provider: str, model: str) -> dict:
+    """Run eval.llm_verify (our parse vs an LLM labeler) on ≤ 50 records; shared by /verify and /conflicts/scan.
 
-    Works where the repository's eval/ and training/ are available (`make api-dev`) and a provider is configured
-    (ANTHROPIC_API_KEY / `ant auth login` for `anthropic`, OPENAI_BASE_URL for a local vLLM). The offline jury image
-    returns 503. At most 50 records per call. Disagreements are for a human to decide (eval/llm_verify.py → review.html)."""
+    Needs the repository's eval/ and training/ (`make api-dev`) and a configured provider (ANTHROPIC_API_KEY /
+    `ant auth login` for `anthropic`, OPENAI_BASE_URL for a local vLLM). The offline jury image answers 503."""
     import sys
     root = Path(__file__).resolve().parents[2]
     if not (root / "eval" / "llm_verify.py").exists():
@@ -174,11 +170,13 @@ def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", 
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
     if len(records) > 50:
-        raise HTTPException(413, "at most 50 records per verify call (use eval/llm_verify.py for files)")
+        raise HTTPException(413, "at most 50 records per call (use eval/llm_verify.py --queue for files)")
     try:
-        from eval.llm_verify import run
+        from eval.llm_verify import PROVIDERS, run
     except ImportError as e:
         raise HTTPException(503, f"verification dependencies missing: {e}") from e
+    if provider not in PROVIDERS:
+        raise HTTPException(400, f"unknown provider {provider!r}; one of {sorted(PROVIDERS)}")
     if provider == "anthropic":
         try:
             import anthropic  # noqa: F401
@@ -186,11 +184,96 @@ def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", 
             raise HTTPException(503, "pip install anthropic (api/requirements-dev.txt)") from e
     recs = [{"id": r.id, "raw_address": r.raw_address} for r in records]
     try:
-        result = run(recs, {}, provider, model, batch_size=20)
+        return run(recs, {}, provider, model, batch_size=20)
     except Exception as e:  # noqa: BLE001 — surface provider / credential errors as 502, never crash the API
         raise HTTPException(502, f"{provider} failed: {type(e).__name__}: {e}") from e
+
+
+@app.post("/api/v1/verify", response_model=None)
+def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
+                    model: str = Query("claude-opus-5-5")):
+    """AI cross-check (dev / ops tool, never part of parsing): our parse vs an LLM labeler, field-by-field diff.
+    At most 50 records per call. To keep the disagreements for a human, use /api/v1/conflicts/scan instead."""
+    result = _crosscheck(records, provider, model)
     return {"summary": result["summary"],
             "records": [{k: r[k] for k in ("id", "raw_address", "ours", "llm", "disagreements", "issues")} for r in result["rows"]]}
+
+
+# ----------------------------------------------------------------------------- human-in-the-loop conflict queue
+def _conflicts() -> ConflictStore:
+    return ConflictStore(DATA_DIR / "conflicts.sqlite3")
+
+
+def _store_correction(record: dict) -> Path:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    path = DATA_DIR / "corrections.jsonl"
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({**record, "ts": time.time()}, ensure_ascii=False) + "\n")
+    return path
+
+
+@app.post("/api/v1/conflicts/scan", response_model=None)
+def conflicts_scan(records: list[RecordIn],
+                   provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
+                   model: str = Query("claude-opus-5-5"),
+                   min_confidence: float = Query(DEFAULT_MIN_CONFIDENCE, ge=0.0, le=1.0,
+                                                 description="our confidence below this also goes to the queue"),
+                   requeue: bool = Query(False, description="re-open records that were already decided")):
+    """Compare the local parser with the AI labeler on ≤ 50 records and queue what needs a human:
+    a field disagreement, our confidence < min_confidence, or AI values that break the copy-not-rewrite rules."""
+    result = _crosscheck(records, provider, model)
+    items = [it for it in (classify(r, min_confidence) for r in result["rows"]) if it]
+    stats = _conflicts().upsert(items, provider, model, requeue=requeue)
+    return {"scanned": len(result["rows"]), "needs_review": len(items), **stats,
+            "conflict_ids": [it["conflict_id"] for it in items], "counts": _conflicts().counts(),
+            "summary": result["summary"]}
+
+
+@app.get("/api/v1/conflicts")
+def conflicts_list(status: str = Query("pending", pattern="^(pending|resolved|dismissed|all)$"),
+                   limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)) -> dict:
+    """The queue, oldest pending first (decided ones: most recent first)."""
+    store = _conflicts()
+    items, total = store.list(status, limit, offset)
+    return {"items": items, "total": total, "counts": store.counts()}
+
+
+@app.get("/api/v1/conflicts/{cid}")
+def conflicts_get(cid: str) -> dict:
+    item = _conflicts().get(cid)
+    if item is None:
+        raise HTTPException(404, f"no conflict {cid}")
+    return item
+
+
+@app.post("/api/v1/conflicts/{cid}/resolve")
+def conflicts_resolve(cid: str, decision: ConflictResolution) -> dict:
+    """Decide a conflict: keep ours / take the AI's / per-field picks + typed values / dismiss.
+    Anything but `dismiss` is written to corrections.jsonl (training data only, never used at inference)."""
+    store = _conflicts()
+    current = store.get(cid)
+    if current is None:
+        raise HTTPException(404, f"no conflict {cid}")
+    if current["status"] != "pending":
+        raise HTTPException(409, f"conflict {cid} is already {current['status']}")
+    item = store.decide(cid, decision.choice, decision.picks, decision.fields, decision.reviewer, decision.note)
+    stored = None
+    if decision.choice != "dismiss":
+        res = item["resolution"]
+        changed = sorted(f for f in res["fields"] if res["fields"][f] != item["ours"].get(f))
+        stored = str(_store_correction({
+            "id": item["record_id"], "raw_address": item["raw_address"], "fields": res["fields"],
+            "reviewer": decision.reviewer or "conflict-queue",
+            "note": f"conflict:{cid} choice={decision.choice} vs {item['provider']}:{item['model']}"
+                    + (f" changed={','.join(changed)}" if changed else " kept=ours")
+                    + (f" · {decision.note}" if decision.note else "")}))
+    return {"item": item, "correction_path": stored, "counts": store.counts()}
+
+
+@app.post("/api/v1/conflicts/{cid}/approve")
+def conflicts_approve(cid: str, side: str = Query("ours", pattern="^(ours|ai)$"), reviewer: str | None = Query(None)) -> dict:
+    """One-click shortcut: approve our output (side=ours) or the AI's (side=ai) as the final answer."""
+    return conflicts_resolve(cid, ConflictResolution(choice=side, reviewer=reviewer))
 
 
 @app.exception_handler(Exception)

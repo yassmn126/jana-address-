@@ -114,6 +114,8 @@ const I = ({ d, size = 16 }: { d: ReactNode; size?: number }) => (
 export const IconGrid = () => <I d={<><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>} />;
 export const IconLayers = () => <I d={<><path d="m12 2 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5" /><path d="m3 17 9 5 9-5" /></>} />;
 export const IconZap = () => <I d={<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />} />;
+export const IconCompare = () => <I d={<><circle cx="6" cy="6" r="3" /><circle cx="18" cy="18" r="3" /><path d="M13 6h3a2 2 0 0 1 2 2v7" /><path d="M11 18H8a2 2 0 0 1-2-2V9" /></>} />;
+export const IconCheck = () => <I size={14} d={<path d="M20 6 9 17l-5-5" />} />;
 export const IconUpload = ({ size = 18 }: { size?: number }) => <I size={size} d={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></>} />;
 export const IconDownload = () => <I d={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></>} />;
 export const IconPin = () => (

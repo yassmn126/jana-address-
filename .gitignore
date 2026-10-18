@@ -14,6 +14,7 @@ jana-address-images.tar
 data/train.json
 data/labels_*.jsonl
 data/corrections.jsonl
+data/conflicts.sqlite3*
 data/dev_gold.json
 data/test_gold.json
 # artifacts: the small OSM/synthetic-only ones ARE committed (gazetteer.sqlite ~16 MB, model.onnx ~4 MB,
