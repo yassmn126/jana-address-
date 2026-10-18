@@ -57,7 +57,7 @@ they are never consulted at inference (the brief forbids answer lookup by exact 
 
 ## Develop
 ```bash
-make test        #  tests: golden conventions, API, ML contract, stress rules, robustness, fuzz, geocoding, AI cross-check
+make test        # 0 tests: golden conventions, API, ML contract, stress rules, robustness, fuzz, geocoding, AI cross-check
 make api-dev     # uvicorn --reload on :8000      (pip install -r api/requirements-dev.txt)
 make web-dev     # vite dev server on :5173, proxies /api
 make eval        # jury-metric replica on a gold file (eval/metric.py)
