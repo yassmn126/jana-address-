@@ -39,15 +39,17 @@ the stress-set fixes (§2a).
 
 | gold set | n | rules | model only | **hybrid** | all-4-address-fields per record (hybrid) |
 |---|---|---|---|---|---|
-| `test_handmade` — **held out, never tuned on** | 89 | 99.81 | 99.81 | **99.81** | 98.9 % |
+| `test_handmade` — held out (see note) | 89 | 100.00 | 99.81 | **100.00** | 100 % |
 | `stress_handmade` — adversarial (§2a) | 106 | 97.66 | 99.75 | **100.00** | 100 % |
 | `dev_handmade` | 139 | 100.00 | 100.00 | **100.00** | 100 % |
 | `conventions_examples` | 42 | 100.00 | 100.00 | **100.00** | 100 % |
-| `rural_handmade` — villages, district centres, Kazakh village strings, post pickups | 40 | 98.48 | 99.25 | **99.62** | 97.5 % |
-| synthetic dev (other seed, in-distribution) | 5 000 | 92.35 | 99.45 | **99.34** | 97.3 % |
+| `rural_handmade` — villages, district centres, Kazakh village strings, post pickups | 40 | 98.86 | 99.25 | **100.00** | 100 % |
+| synthetic dev (other seed, in-distribution) | 5 000 | 92.41 | 99.45 | **99.39** | 97.5 % |
 
-Numbers as of the last `make ab` (the full history is in [EXPERIMENTS.md](EXPERIMENTS.md)). The one remaining held-out error is ambiguous: «Байконыр» → «Байконур» (Kazakh name without Kazakh letters, convention Q2;
-the label keeps it as written). Model choice between v4 and v4b was made on the stress set (99.60 → 99.90 hybrid before
+Numbers as of the last `make ab` (the full history is in [EXPERIMENTS.md](EXPERIMENTS.md)). **Note on the held-out set:** its last
+error («Байконыр» → «Байконур») was fixed after the Claude cross-check (§2b) ran over all demo sets, including this one: Claude and the
+gold label agreed on «as written», so the mapping was narrowed to literal Kazakh forms. Treat 100.00 there as dev-like; the clean
+estimate before that fix was 99.81. Model choice between v4 and v4b was made on the stress set (99.60 → 99.90 hybrid before
 tuning); v4b is also better on the held-out set, which is reported, not used.
 
 * **Speed:** 0.6 ms/record end to end (rules + tagger + arbiter + gazetteer + confidence). 1 000 records take 0.61 s; the limit is 300 s.
@@ -107,6 +109,13 @@ to a human: `review.html` (pick ours / LLM / type a value → export `correction
 applies to the LLM too. With gold, both sides are scored and each disagreement gets a verdict. Needs `ANTHROPIC_API_KEY` (or
 `ant auth login`), or `VERIFY_ARGS="--provider openai-compatible"` with `OPENAI_BASE_URL`. Never part of parsing; the offline
 jury image answers `/api/v1/verify` with 503. Do not send `train.json` to an external API without the organizers' OK.
+
+**First real Claude run (2026-10-18, Opus 5.5 via `ant auth login`, 416 addresses, 7.5 min):** Claude agreed with our parser on
+96 % of records; against gold our parser scored 99.79 and Claude 99.37. On the disputed fields we were right 13 times
+(корпус → «12/2» convention, «ЮКО» → Туркестанская, «10Б», …) and Claude 6 times — all 6 fixed: «Костанай обл» as a province,
+«Байконыр» kept as written, «рядом с мечетью» landmark, no landmark from «звонить за час», province provenance for a typo'd
+republican city, and a gold-label inconsistency (open question Q14 in CONVENTIONS.md). Run it with `bash scripts/verify_with_claude.sh`
+(key from a hidden prompt / the clipboard, never echoed) or with no key at all after `ant auth login`.
 
 ## 2c. Geocoding and suggest — what Yandex / 2GIS address stacks do, offline
 
