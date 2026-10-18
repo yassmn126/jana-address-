@@ -52,6 +52,7 @@ def main(argv=None) -> int:
     ap.add_argument("--errors-dir")
     ap.add_argument("--json")
     ap.add_argument("--modes", default=",".join(MODES))
+    ap.add_argument("--log", metavar="NOTE", help="append this run to eval/history.jsonl with a note (see eval/history.py)")
     a = ap.parse_args(argv)
     modes = a.modes.split(",")
     if not get_tagger().available():
@@ -86,6 +87,10 @@ def main(argv=None) -> int:
                   " ".join(f"{r['per_field'][f]['acc']:7.3f}" for f in ADDRESS + DETAILS + REFS))
         if "hybrid_vs_rules_changed_records" in report[name]:
             print(f"  hybrid changed {report[name]['hybrid_vs_rules_changed_records']} records vs rules")
+    if a.log is not None:
+        from eval.history import append
+        rec = append(report, note=a.log)
+        print(f"\nlogged to eval/history.jsonl (commit {rec['commit']}{'*' if rec['dirty'] else ''}, model {rec['artifacts'].get('model.onnx')})")
     if a.json:
         Path(a.json).parent.mkdir(parents=True, exist_ok=True)
         Path(a.json).write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")

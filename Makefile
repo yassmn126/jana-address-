@@ -5,7 +5,7 @@ SAMPLE ?= data/sample_input.json
 GOLD ?= data/sample_output.json
 
 .PHONY: help up down logs test eval parse label-dry label dataset synth train export calibrate eval-dev images save-images offline-test speed web-dev api-dev \
-        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check
+        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check history
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -103,7 +103,11 @@ tune: ## grid-search the arbiter thresholds → api/artifacts/arbiter_policy.jso
 	$(PY) -m training.tune_arbiter $(GOLD_SETS) --gold data/dataset/synth_dev_gold.json:0.3
 
 ab: ## rules vs model vs hybrid, jury metric per gold file (test_handmade is the held-out set: never tune on it)
-	$(PY) -m eval.ab --gold data/test_handmade.json $(GOLD_SETS) --gold data/dataset/synth_dev_gold.json --errors-dir runs/ab --json runs/ab/ab.json
+	$(PY) -m eval.ab --gold data/test_handmade.json $(GOLD_SETS) $(if $(wildcard data/dataset/synth_dev_gold.json),--gold data/dataset/synth_dev_gold.json,) --errors-dir runs/ab --json runs/ab/ab.json --log "$(NOTE)"
+	$(PY) -m eval.history --md docs/EXPERIMENTS.md > /dev/null
+
+history: ## experiment history table (eval/history.jsonl → docs/EXPERIMENTS.md)
+	$(PY) -m eval.history --md docs/EXPERIMENTS.md
 
 ml-cold-start: gazetteer synth-grammar train-charcrf tune ## everything above + calibration + A/B, no train.json needed
 	$(PY) -m training.calibrate --gold data/dataset/synth_dev_gold.json --gold data/dev_handmade.json:10 --gold data/stress_handmade.json:10 --eval-gold data/test_handmade.json --plot

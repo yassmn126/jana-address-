@@ -97,7 +97,7 @@ make osm gazetteer          # OSM → api/artifacts/gazetteer.sqlite
 make synth-grammar          # 200k train + 5k dev synthetic rows
 make train-charcrf          # → api/artifacts/model.onnx + model_meta.json (CPU)
 make tune                   # → api/artifacts/arbiter_policy.json
-make ab                     # rules vs model vs hybrid
+make ab NOTE="what changed" # rules vs model vs hybrid, appended to eval/history.jsonl → docs/EXPERIMENTS.md
 make ml-cold-start          # all of the above + calibration + tests
 ```
 `JANA_MODE=rules|model|hybrid` switches the runtime (default hybrid). `JANA_MODEL=off` disables the tagger,
