@@ -1,0 +1,175 @@
+[
+ {
+  "raw_address": "Nur-Sultan city, Kabanbay batyr avenue 11 building 2, office 305, tel 87012345678",
+  "fields": {
+   "province": "Астана",
+   "city": "Nur-Sultan",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Kabanbay batyr",
+   "house": "11/2",
+   "apartment": "305",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы,Розыбакиева247корп3кв56",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Розыбакиева",
+   "house": "247/3",
+   "apartment": "56",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Аузовский рйн, мкр-н Жетысу-3, дом 25 корпс 2, кв 61",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Аузовский",
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Жетысу-3",
+   "house": "25/2",
+   "apartment": "61",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Бостандыкский район, ул. Тимирязева 12 корпус 2 блок 3, кв 15",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Бостандыкский",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Тимирязева",
+   "house": "12/2/3",
+   "apartment": "15",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Уральск, ул. Досмухамедова 41 лит. А, 2 этаж, бутик 14",
+  "fields": {
+   "province": null,
+   "city": "Уральск",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Досмухамедова",
+   "house": "41/А",
+   "apartment": "14",
+   "entrance": null,
+   "floor": "2",
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Қызылорда қаласындағы Әйтеке би көшесінің 27 үйі, 2 корпус, 3-інші кіреберіс, 18 пәтер",
+  "fields": {
+   "province": null,
+   "city": "Кызылорда",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Әйтеке би",
+   "house": "27/2",
+   "apartment": "18",
+   "entrance": "3",
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "улица абая дом десятый квартира пять",
+  "fields": {
+   "province": null,
+   "city": null,
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "абая",
+   "house": "десятый",
+   "apartment": "пять",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Актобе, пр Абилкайыр хана, дом сорок три, подъезд второй, этаж седьмой, квартира сто двенадцать",
+  "fields": {
+   "province": null,
+   "city": "Актобе",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Абилкайыр хана",
+   "house": "сорок три",
+   "apartment": "сто двенадцать",
+   "entrance": "второй",
+   "floor": "седьмой",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:entrance",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Кокшетау, это рядом с вокзалом, улица Валиханова дом двадцать восемь а, квартира девять",
+  "fields": {
+   "province": null,
+   "city": "Кокшетау",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Валиханова",
+   "house": "двадцать восемь а",
+   "apartment": "девять",
+   "entrance": null,
+   "floor": null,
+   "landmark": "вокзалом"
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ }
+]

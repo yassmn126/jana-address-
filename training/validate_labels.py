@@ -62,11 +62,26 @@ def _city_is_kk_mapping(raw: str, value: str) -> bool:
 
     lex = get_lexicon()
     target = match_view(value)
-    for w in re.findall(r"[^\s,;/.]+(?:\s[^\s,;/.]+)?", raw):
-        rec = lex.city_by_name.get(match_view(w))
-        if rec and match_view(rec["name"]) == target:
-            return True
+    words = re.findall(r"[^\s,;/.]+", raw)
+    for n in (1, 2):                      # every 1- and 2-word window («Ақтөбе қаласы» must also try «Ақтөбе»)
+        for i in range(len(words) - n + 1):
+            rec = lex.city_by_name.get(match_view(" ".join(words[i:i + n])))
+            if rec and match_view(rec["name"]) == target:
+                return True
     return False
+
+
+_BUILDING = r"(?:корпус[а-я]*|корп\.?|к\.|блок[а-я]*|block|korpus|korp\.?|строение|стр\.?)"
+
+
+def _house_is_join(raw: str, value: str) -> bool:
+    """«12 корпус 2» / «12 блок А» / «42 үй 2 корпус» labeled «12/2» / «12/А» (CONVENTIONS Q7, house_building_join)."""
+    m = re.fullmatch(r"(\d+[^\W\d_]?)/(\w+)", value)
+    if not m:
+        return False
+    a, b = (re.escape(x) for x in m.groups())
+    return bool(re.search(rf"(?<!\d){a}\s*(?:үй|дом)?[\s,.]*{_BUILDING}\s*{b}(?!\w)", raw, re.I)
+                or re.search(rf"(?<!\d){a}\s*(?:үй)?[\s,.]*{b}\s*{_BUILDING}(?!\w)", raw, re.I))
 
 
 def validate_record(raw: str, f: dict) -> list[dict]:
@@ -91,6 +106,8 @@ def validate_record(raw: str, f: dict) -> list[dict]:
         if not find_all(raw, v):
             if k == "city" and _city_is_kk_mapping(raw, v):
                 warn("city_mapped_from_kk", f"city={v!r} is the Russian name of a Kazakh mention", k)
+            elif k == "house" and _house_is_join(raw, v):
+                warn("house_building_join", f"house={v!r} joins a корпус/блок", k)
             else:
                 err("not_in_string", f"{k}={v!r} not found in raw", k)
     p = f.get("province")
@@ -118,8 +135,10 @@ def validate_record(raw: str, f: dict) -> list[dict]:
             err("district_has_type_word", f"district={d!r} contains «район»", "district")
     s = f.get("street_name")
     if s is not None:
-        first = match_view(_WS_PUNCT.split(s.strip())[0]) if s.strip() else ""
-        if first in {match_view(w) for w in TYPE_WORDS} and len(_WS_PUNCT.split(s.strip())) > 1:
+        first_raw = _WS_PUNCT.split(s.strip())[0] if s.strip() else ""
+        first = match_view(first_raw)
+        initial = len(first_raw) == 1 and first_raw.isupper()          # «Ш. Уалиханова» is an initial, not «ш.» = шоссе
+        if first in {match_view(w) for w in TYPE_WORDS} and not initial and len(_WS_PUNCT.split(s.strip())) > 1:
             err("street_name_has_type_word", f"street_name={s!r} starts with a type word", "street_name")
         if match_view(s) in {match_view(w) for w in TYPE_WORDS}:
             err("street_name_is_type_word", f"street_name={s!r} is only a type word", "street_name")

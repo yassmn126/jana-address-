@@ -65,8 +65,9 @@ def parse_one(id_: str, raw: str, explain: bool = False, mode: str | None = None
         tagger = get_tagger()
         if tagger.available() and mode != "rules":
             model_spans, tok_labels, tok_probs = tagger.tag(rp.tokens)
+            known = (lambda w: tagger.charcrf.featurizer.word_id(w) != 1) if tagger.charcrf is not None else None
             arbitrate(rp, model_spans, parser, policy=MODEL_ONLY if mode == "model" else None,
-                      tok_labels=tok_labels, tok_probs=tok_probs)
+                      tok_labels=tok_labels, tok_probs=tok_probs, known_word=known)
             if explain:
                 rp.meta["model_token_labels"] = tok_labels
                 rp.meta["model_token_probs"] = [round(p, 3) for p in tok_probs]

@@ -1,0 +1,40 @@
+[
+ {
+  "raw_address": "Нұр-Сұлтан қ., Қабанбай батыр даңғылы 53, 7 кіреберіс, 120 пәтер",
+  "fields": {
+   "province": "Астана",
+   "city": "Нур-Султан",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Қабанбай батыр",
+   "house": "53",
+   "apartment": "120",
+   "entrance": "7",
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:city"
+  ]
+ },
+ {
+  "raw_address": "090300, Батыс Қазақстан облысы, Бөрлі ауданы, Ақсай қаласы, 4 ықшам аудан, 12 үй, 33 пәтер",
+  "fields": {
+   "province": "Западно-Казахстанская область",
+   "city": "Аксай",
+   "district": "Бөрлі",
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "4",
+   "house": "12",
+   "apartment": "33",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:city"
+  ]
+ }
+]

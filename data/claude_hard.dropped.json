@@ -1,0 +1,138 @@
+[
+ {
+  "raw_address": "Павлодар,Естая99корп2кв14",
+  "fields": {
+   "province": null,
+   "city": "Павлодар",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Естая",
+   "house": "99/2",
+   "apartment": "14",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Бостандыкский р-н, ул. Тимирязева 42 корпус 2 блок 3, кв 17",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Бостандыкский",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Тимирязева",
+   "house": "42/2/3",
+   "apartment": "17",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Атырау, ул. Сатпаева 15 лит. А, 2 этаж",
+  "fields": {
+   "province": null,
+   "city": "Атырау",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Сатпаева",
+   "house": "15/А",
+   "apartment": null,
+   "entrance": null,
+   "floor": "2",
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "улица абая дом десятый квартира пять",
+  "fields": {
+   "province": null,
+   "city": null,
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "абая",
+   "house": "десятый",
+   "apartment": "пять",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "г Караганда ул Ерубаева дом пятнадцать кв сорок два подъезд третий этаж второй",
+  "fields": {
+   "province": null,
+   "city": "Караганда",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Ерубаева",
+   "house": "пятнадцать",
+   "apartment": "сорок два",
+   "entrance": "третий",
+   "floor": "второй",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:entrance",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Астана, Сарыарка район, проспект Республики сорок восемь, вход со двора, офис двенадцать",
+  "fields": {
+   "province": "Астана",
+   "city": "Астана",
+   "district": "Сарыарка",
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Республики",
+   "house": "сорок восемь",
+   "apartment": "двенадцать",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Павлодар ул Кутузова 204 это напротив школы 25 третий подъезд пятый этаж кв 77",
+  "fields": {
+   "province": null,
+   "city": "Павлодар",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Кутузова",
+   "house": "204",
+   "apartment": "77",
+   "entrance": "третий",
+   "floor": "пятый",
+   "landmark": "школы 25"
+  },
+  "errors": [
+   "not_a_number:entrance",
+   "not_a_number:floor"
+  ]
+ }
+]
