@@ -21,6 +21,7 @@ import os
 from .assembly.arbiter import MODEL_ONLY, arbitrate
 from .assembly.canon import FIELDS, assemble
 from .confidence.heuristic import calibrated_confidence, confidence
+from .countries import is_country_word, local_country
 from .gazetteer.enrich import enrich
 from .ml.onnx_tagger import get_tagger
 from .rules.grammar import RuleParser
@@ -78,6 +79,15 @@ def parse_one(id_: str, raw: str, explain: bool = False, mode: str | None = None
             conf = confidence(rp.flags, fields)
         if all(fields.get(k) is None for k in ("street_name", "house", "apartment", "city")):
             conf = min(conf, 0.08)     # conventions: an unparseable string gets nulls and confidence ≤ 0.1
+        country = local_country(raw, fields, prov)
+        if country and country != "KZ":   # foreign address: the KZ grammar/gazetteer answer is unreliable → review / AI
+            rp.flags.append(f"foreign:{country}")
+            if is_country_word(fields.get("city")):
+                fields["city"] = None
+            for f in ("province", "city", "district", "living_area"):
+                if str(prov.get(f) or "").startswith("gazetteer"):
+                    fields[f] = None
+            conf = min(conf, 0.30)
         out = {"id": id_, "raw_address": raw, **fields, "confidence": conf}
         if explain:
             out["spans"] = [
@@ -90,6 +100,7 @@ def parse_one(id_: str, raw: str, explain: bool = False, mode: str | None = None
             ]
             out["flags"] = rp.flags
             out["provenance"] = prov
+            out["country"] = country or "KZ"
             out["field_confidence"] = {s.field.lower(): round(s.score, 3) for s in rp.spans.values()}
             out["model_probs"] = rp.meta.get("model_probs", {})
             from .gazetteer.osm import get_gazetteer
@@ -107,8 +118,15 @@ def parse_one(id_: str, raw: str, explain: bool = False, mode: str | None = None
         return out
 
 
-def parse_batch(records: Iterable[dict], explain: bool = False, mode: str | None = None) -> list[dict]:
-    return [parse_one(str(r.get("id", i)), r.get("raw_address", ""), explain, mode) for i, r in enumerate(records)]
+def parse_batch(records: Iterable[dict], explain: bool = False, mode: str | None = None, ai: str | None = None) -> list[dict]:
+    """ai: off | foreign | fallback | always (default env JANA_AI_MODE, else off) — see docs/AI_MODE.md.
+    With the AI on, records are parsed locally first (with explain data for routing) and the AI answer is merged."""
+    ai_mode = (ai or os.environ.get("JANA_AI_MODE") or "off").lower()
+    if ai_mode == "off":
+        return [parse_one(str(r.get("id", i)), r.get("raw_address", ""), explain, mode) for i, r in enumerate(records)]
+    from .llm.policy import apply_ai
+    rows = [parse_one(str(r.get("id", i)), r.get("raw_address", ""), True, mode) for i, r in enumerate(records)]
+    return apply_ai(rows, ai_mode)
 
 
 def main(argv: list[str] | None = None) -> int:

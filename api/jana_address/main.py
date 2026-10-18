@@ -97,10 +97,10 @@ def _respond(rows: list[dict], explain: bool, download: bool) -> JSONResponse:
     return JSONResponse(_serialize(rows, explain), headers=headers)
 
 
-def _parse_and_archive(records: list[dict], explain: bool, source: str) -> list[dict]:
-    """Parse, then keep the batch in the run archive (best effort — the response never depends on it)."""
+def _parse_and_archive(records: list[dict], explain: bool, source: str, ai: str | None = None) -> list[dict]:
+    """Parse (optionally with the AI path, see llm/), then keep the batch in the run archive (best effort)."""
     t0 = time.perf_counter()
-    rows = parse_batch(records, explain)
+    rows = parse_batch(records, explain, ai=ai)
     elapsed_ms = (time.perf_counter() - t0) * 1000
     arch = get_archive()
     if arch is not None:
@@ -119,7 +119,9 @@ def _parse_and_archive(records: list[dict], explain: bool, source: str) -> list[
           responses={200: {"description": "Array of records in the jury schema (ExplainOut with ?explain=1)"}})
 async def parse_batch_endpoint(request: Request,
                                explain: bool = Query(False, description="add spans/tokens/flags/provenance"),
-                               download: bool = Query(False, description="return as an attachment output.json")):
+                               download: bool = Query(False, description="return as an attachment output.json"),
+                               ai: str | None = Query(None, pattern="^(off|foreign|fallback|always)$",
+                                                 description="AI path: off | foreign | fallback | always (default env JANA_AI_MODE, else off)")):
     """Batch endpoint for the jury. Accepts BOTH:
       * JSON body: `[{"id","raw_address"}, ...]` or `{"records": [...]}` (also JSON Lines)
       * multipart/form-data with the file in field `file` (any field name is accepted)
@@ -137,23 +139,32 @@ async def parse_batch_endpoint(request: Request,
         payload = _parse_payload_bytes(data)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"invalid JSON: {e}") from e
-    return _respond(_parse_and_archive(_to_records(payload), explain, "batch"), explain, download)
+    return _respond(_parse_and_archive(_to_records(payload), explain, "batch", ai), explain, download)
 
 
 @app.post("/api/v1/parse/batch/file", response_model=None)
-async def parse_batch_file(file: UploadFile = File(...), explain: bool = Query(False), download: bool = Query(False)):
+async def parse_batch_file(file: UploadFile = File(...), explain: bool = Query(False), download: bool = Query(False),
+                           ai: str | None = Query(None, pattern="^(off|foreign|fallback|always)$")):
     """Alias of /api/v1/parse/batch for clients that insist on a named multipart field."""
     try:
         payload = _parse_payload_bytes(await file.read())
     except Exception as e:  # noqa: BLE001
         raise HTTPException(400, f"invalid JSON: {e}") from e
-    return _respond(_parse_and_archive(_to_records(payload), explain, f"file:{file.filename or ''}"), explain, download)
+    return _respond(_parse_and_archive(_to_records(payload), explain, f"file:{file.filename or ''}", ai), explain, download)
 
 
 @app.post("/api/v1/parse", response_model=None)
-def parse_single(record: RecordIn, explain: bool = Query(False)):
-    rows = _parse_and_archive([{"id": record.id, "raw_address": record.raw_address}], explain, "single")
+def parse_single(record: RecordIn, explain: bool = Query(False),
+                 ai: str | None = Query(None, pattern="^(off|foreign|fallback|always)$")):
+    rows = _parse_and_archive([{"id": record.id, "raw_address": record.raw_address}], explain, "single", ai)
     return JSONResponse(_serialize(rows, explain)[0])
+
+
+@app.get("/api/v1/ai/status")
+def ai_status() -> dict:
+    """Runtime AI path: availability, model, effort, prompt version, tokens and USD spent since start."""
+    from .llm.client import get_client
+    return get_client().status()
 
 
 # ------------------------------------------------------------------ run archive
@@ -252,7 +263,7 @@ def _crosscheck(records: list[RecordIn], provider: str, model: str) -> dict:
 
 @app.post("/api/v1/verify", response_model=None)
 def verify_endpoint(records: list[RecordIn], provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
-                    model: str = Query("claude-opus-5-5")):
+                    model: str = Query("claude-fable-5-1", description="claude-fable-5-1 (strongest) | claude-opus-5-5 | claude-haiku-5-5")):
     """AI cross-check (dev / ops tool, never part of parsing): our parse vs an LLM labeler, field-by-field diff.
     At most 50 records per call. To keep the disagreements for a human, use /api/v1/conflicts/scan instead."""
     result = _crosscheck(records, provider, model)
@@ -276,7 +287,7 @@ def _store_correction(record: dict) -> Path:
 @app.post("/api/v1/conflicts/scan", response_model=None)
 def conflicts_scan(records: list[RecordIn],
                    provider: str = Query("anthropic", description="anthropic | openai-compatible | rules"),
-                   model: str = Query("claude-opus-5-5"),
+                   model: str = Query("claude-fable-5-1", description="claude-fable-5-1 (strongest) | claude-opus-5-5 | claude-haiku-5-5"),
                    min_confidence: float = Query(DEFAULT_MIN_CONFIDENCE, ge=0.0, le=1.0,
                                                  description="our confidence below this also goes to the queue"),
                    requeue: bool = Query(False, description="re-open records that were already decided")):

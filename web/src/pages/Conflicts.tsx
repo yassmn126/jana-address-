@@ -8,7 +8,7 @@ import { DEFAULT_PAGE_SIZE, FilterChip, PAGE_SIZES, Pagination, SearchField, Seg
 import { AI_OFF_TEXT } from "../components/record";
 import { Chip, ConfChip, ErrorNote, IconCheck, IconChevronRight, IconCompare, IconText, type ChipStatus } from "../components/ui";
 import { ADDRESSES, count, fmtInt, fmtScore, fmtWhen } from "../format";
-import { PROVIDERS, saveProvider, savedProvider } from "../lib/ai";
+import { PROVIDERS, providerEntry, saveProvider, savedProvider } from "../lib/ai";
 import { useAssistant } from "../state/assistant";
 import { useService } from "../state/service";
 import { useSession } from "../state/session";
@@ -257,11 +257,11 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
   const [last, setLast] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const choose = (pid: string) => {
-    const m = PROVIDERS.find((p) => p.id === pid)?.model ?? "";
-    setProvider(pid);
-    setModel(m);
-    saveProvider(pid, m);
+  const choose = (key: string) => {
+    const entry = PROVIDERS.find((p) => p.key === key) ?? PROVIDERS[0];
+    setProvider(entry.id);
+    setModel(entry.model);
+    saveProvider(entry.id, entry.model);
   };
 
   const scan = async (records: { id: string; raw_address: string }[]) => {
@@ -280,7 +280,7 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
       else react("happy", `ИИ согласен со всеми ${total.scanned} ответами.`);
     } catch (e) {
       const down = (e as { status?: number }).status === 502 && provider !== "rules";
-      setError(`${down ? `«${PROVIDERS.find((x) => x.id === provider)?.label ?? provider}» не отвечает на этом сервере. Выберите «Только правила». ` : ""}${e instanceof Error ? e.message : String(e)}`);
+      setError(`${down ? `«${providerEntry(provider, model).label}» не отвечает на этом сервере. Выберите «Только правила». ` : ""}${e instanceof Error ? e.message : String(e)}`);
       react("error", "Сверка с ИИ не выполнена.");
     } finally {
       setScanning(null);
@@ -306,8 +306,8 @@ function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) =>
           </div>
         </div>
         {ai !== false && <div className="scan-controls">
-          <select className="field select-pill" value={provider} onChange={(e) => choose(e.target.value)} aria-label="Внешний ИИ">
-            {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          <select className="field select-pill" value={providerEntry(provider, model).key} onChange={(e) => choose(e.target.value)} aria-label="Внешний ИИ">
+            {PROVIDERS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select>
           <label className="inline-field">
             <span>Модель</span>

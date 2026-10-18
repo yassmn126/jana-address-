@@ -62,6 +62,8 @@ class ExplainOut(RecordOut):
     field_confidence: dict[str, float] = {}
     model_probs: dict[str, float] = {}
     geo: Optional[dict] = None        # {lat, lon, precision: house|house_near|street|microdistrict|district|locality, source}
+    country: Optional[str] = None     # ISO 3166-1 alpha-2, offline detection (KZ unless the string says otherwise)
+    ai: Optional[dict] = None         # AI path: {used, base, agree, changed, invalid, notes} or {used: false, error}
 
 
 class Correction(BaseModel):

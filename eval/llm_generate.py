@@ -121,10 +121,10 @@ def generate(theme: str, n: int, effort: str, system: str) -> list[dict]:
     user = (f"Theme: {theme}\nWrite {n} different addresses for this theme and label them. In `tags` name what makes each "
             f"one hard (e.g. glued, kazakh, latin, typo, micro_number, landmark, phone, no_city, korpus, dash, village).")
     with client.beta.messages.stream(
-        model=MODEL, max_tokens=32000, system=system,
+        model=MODEL, max_tokens=32000,
+        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],   # shared prefix → cache reads
         messages=[{"role": "user", "content": user}],
         output_config={"format": {"type": "json_schema", "schema": SCHEMA}, "effort": effort},
-        cache_control={"type": "ephemeral"},
         betas=["server-side-fallback-2026-07-01"], fallbacks="default",
     ) as stream:
         msg = stream.get_final_message()

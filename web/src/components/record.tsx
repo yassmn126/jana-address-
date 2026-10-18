@@ -160,7 +160,7 @@ export function AiCheck({ r }: { r: RecordOut }) {
         <span className="scan-icon"><IconCompare /></span>
         <div className="ai-check-text">
           <p className="ai-check-title">Сверка с внешним ИИ</p>
-          <p className="insp-note">{ai === false ? "недоступна на этом сервере" : `${providerLabel(provider)}${model ? ` · ${model}` : ""}`}</p>
+          <p className="insp-note">{ai === false ? "недоступна на этом сервере" : `${providerLabel(provider, model)}${model ? ` · ${model}` : ""}`}</p>
         </div>
         {ai !== false && (
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => run()} disabled={state.status === "busy" || ai === null}>
@@ -190,7 +190,7 @@ export function AiCheck({ r }: { r: RecordOut }) {
       )}
       {state.status === "error" && (
         <div className="ai-check-result is-flag">
-          <p>{state.providerDown ? `«${providerLabel(provider)}» не отвечает на этом сервере: ${state.text}` : state.text}</p>
+          <p>{state.providerDown ? `«${providerLabel(provider, model)}» не отвечает на этом сервере: ${state.text}` : state.text}</p>
           {state.providerDown && <button type="button" className="btn btn-ghost btn-sm ai-retry" onClick={useRules}>Сверить правилами</button>}
         </div>
       )}

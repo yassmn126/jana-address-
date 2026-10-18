@@ -1,0 +1,13 @@
+# Local stack WITH the AI cross-check (Claude): the API is built from api/Dockerfile.render (jury image + Claude SDK)
+# and reads the key from .env (copy .env.example). The plain `docker compose up` stays the offline jury stack.
+#   docker compose -f docker-compose.yml -f docker-compose.ai.yml up --build
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile.render
+    image: jana-address-api-ai:latest
+    environment:
+      - JANA_DATA_DIR=/data
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_WORKSPACE_ID=${ANTHROPIC_WORKSPACE_ID:-}
