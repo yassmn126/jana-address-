@@ -178,8 +178,21 @@ def arbitrate(rp: RuleParse, model_spans: list[ModelSpan], parser: RuleParser, p
     policy = policy or POLICY
     ignore_rules = policy.get("ignore_rules", False)
     best_model: dict[str, ModelSpan] = {}
+    rule_city = None if ignore_rules else rp.spans.get("CITY")
+    known_city = rule_city is not None and bool(rp.meta.get("city_known")) and rule_city.rule != "city_osm_chunk"
     for ms in model_spans:
         if ms.field in FIELDS and (ms.field not in best_model or ms.prob > best_model[ms.field].prob):
+            if known_city and ms.field in NAME_FIELDS and ms.field != "CITY" \
+                    and (ms.start, ms.end) != (rule_city.start, rule_city.end):
+                # «ЖК Хайвил Астана»: a name span never swallows the known city at its edge — the city stays a city
+                if ms.start == rule_city.start and ms.end > rule_city.end:
+                    rest = [t for t in rp.tokens if t.start >= rule_city.end and t.end <= ms.end and t.kind != "PUNCT"]
+                    if rest:
+                        ms = dataclasses.replace(ms, start=rest[0].start)
+                elif ms.end == rule_city.end and ms.start < rule_city.start:
+                    rest = [t for t in rp.tokens if t.start >= ms.start and t.end <= rule_city.start and t.kind != "PUNCT"]
+                    if rest:
+                        ms = dataclasses.replace(ms, end=rest[-1].end)
             s0, e0 = _trim_noise(rp, ms.field, ms.start, ms.end)
             if (s0, e0) != (ms.start, ms.end):
                 ms = dataclasses.replace(ms, start=s0, end=e0)

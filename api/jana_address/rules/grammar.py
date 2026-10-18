@@ -1338,8 +1338,9 @@ class RuleParser:
                     elif q2 is not None and toks[q2].role == "house_kw" or (q2 is not None and "HOUSE" in rp.spans
                                                                              and rp.spans["HOUSE"].start >= toks[q2].start):
                         second = -1
-                    if second is not None and self._known_microdistrict(rp, " ".join(toks[k].text for k in idxs)):
-                        # «Орбита 3, 27а», «Аксай 3 д 20»: a known микрорайон + number → the number is part of the name
+                    base = " ".join(toks[k].text for k in idxs)
+                    if second is not None and (self._known_microdistrict(rp, base) or self._living_anywhere(f"{base} {toks[q].text}")):
+                        # «Орбита 3, 27а», «Аксай 3 д 20», «Самал 3; 15»: a known микрорайон + number → the number is the name's
                         self._set(rp, "STREET_NAME", toks, idxs + [q], "fallback_micro_number", 0.65)
                         rp.flags.append("street_without_type")
                         rp.flags.append("microdistrict_number_in_name")

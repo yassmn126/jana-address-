@@ -97,8 +97,8 @@ docs/               CONVENTIONS.md · HANDOFF.md · ML.md · ARCHITECTURE.md
 | Jury-metric replica + error report + speed check | ✅ |
 | Labeling pipeline (LLM / local vLLM / rules) with validators | ✅ (needs train.json) |
 | Dataset builder, synthetic generator, training/export/calibration scripts | ✅ scripts + round-trip tests (no model trained yet) |
-| ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses (v6: + Latin-aware synthetic), ONNX 10.5 MB, 0.7 ms/record; jury metric 100.00 on every hand-labeled set | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
-| **Independent benchmarks**: 5 sets written and labeled by Claude Opus 5.5 (22 regional + 16 adversarial themes), not by us | ✅ regional: 97.08 → **99.47**; untouched regional: main 96.30 → **99.33**; **adversarial, untouched, measured once: main 83.51 → 96.47** — [docs/BENCHMARK.md](docs/BENCHMARK.md), `make benchmark` |
+| ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses, then on 5.9k Claude-written teacher rows (v8), ONNX 10.5 MB, 0.8 ms/record; jury metric 100.00 on the hand-labeled sets (one convention record aside) | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
+| **Independent benchmarks**: 5 sets written and labeled by Claude Opus 5.5 (22 regional + 16 adversarial themes), not by us | ✅ regional: 97.08 → **99.47**; untouched regional #6: main 98.49 → **98.94**; **adversarial, untouched, measured once per model: main 83.51 → 96.47 (v6) → 98.98 (v8)** — [docs/BENCHMARK.md](docs/BENCHMARK.md), `make benchmark` |
 | Gazetteer: OSM Kazakhstan → sqlite (settlements ru/kk, provinces, city districts, 5.3k микрорайоны/ЖК, 50k streets, house-level districts), seed fallback | ✅ `make gazetteer` |
 | Calibrated confidence (logistic + isotonic, JSON, numpy-only at runtime) | ✅ on synthetic + handmade gold — refit on the real dev set |
 | Geocoding (house → street → микрорайон → district → city point, `?explain=1` / `POST /api/v1/geocode`) + suggest (`GET /api/v1/suggest`) | ✅ 97.4 % of real OSM addresses typed messily resolve to the exact building |

@@ -33,9 +33,10 @@ region and dozens of villages, so province stays null unless the string or the d
 
 ## 2. Results
 
-Jury-metric replica (`eval/metric.py`, strict), `make ab`. Model = **v6** char-CRF: 220k synthetic rows × 6 epochs
-(41 min on an M4 CPU), warm-started on 60k rows from the newer generator (v4b), then on 120k rows whose Latin mode writes
-addresses the way the independent benchmark showed customers type them (v6, 3 epochs, 9 min). Rules = the grammar after the
+Jury-metric replica (`eval/metric.py`, strict), `make ab`. Model = **v8** char-CRF: 220k synthetic rows × 6 epochs
+(41 min on an M4 CPU), warm-started on 60k rows from the newer generator (v4b), then on 120k Latin-aware rows (v6), then
+on **5 861 Claude-written teacher rows ×3 + the four Claude benchmark sets + 60k synthetic** (v8, 4 epochs, 7 min; see
+BENCHMARK.md). v8's gain shows only where it should: on addresses nobody tuned on. Rules = the grammar after the
 stress-set (§2a) and independent-benchmark ([BENCHMARK.md](BENCHMARK.md)) fixes.
 
 | gold set | n | rules | model only | **hybrid** | all-4-address-fields per record (hybrid) |
@@ -43,7 +44,8 @@ stress-set (§2a) and independent-benchmark ([BENCHMARK.md](BENCHMARK.md)) fixes
 | **independent benchmark — written & labeled by Claude Opus 5.5** ([BENCHMARK.md](BENCHMARK.md)) | 526 | 97.41 | 98.85 | **99.47** (97.08 on first contact) | 99.8 % |
 | **untouched held-out — second Claude set, measured once** ([BENCHMARK.md](BENCHMARK.md)) | 263 | 97.19 | 98.83 | **99.33** (main: 96.30) | 98.5 % |
 | **adversarial HARD set #4** — 16 themes of what breaks parsers, fixed against ([BENCHMARK.md](BENCHMARK.md)) | 217 | 89.30 | 90.10 | **98.92** (first contact 91.66, main 85.69) | 97.7 % |
-| **adversarial HARD set #5 — untouched, measured once after everything** | 190 | 94.54 | 94.10 | **96.47** (main 83.51, PR #3 head 90.42) | 87.4 % |
+| **adversarial HARD set #5 — untouched, measured once per model** | 190 | 94.54 | 98.86 | **98.98** (v6: 96.47; main 83.51) | 94.6 % |
+| **regional set #6 — untouched, measured once per model** | 260 | 96.46 | 98.88 | **98.94** (v6: 98.49) | 98.5 % |
 | `test_handmade` — held out (see note) | 89 | 100.00 | 100.00 | **100.00** | 100 % |
 | `stress_handmade` — adversarial (§2a) | 106 | 97.66 | 99.85 | **100.00** | 100 % |
 | `dev_handmade` | 139 | 100.00 | 100.00 | **100.00** | 100 % |

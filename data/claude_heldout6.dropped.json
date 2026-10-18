@@ -1,0 +1,78 @@
+[
+ {
+  "raw_address": "Павлодарскя обл.Павлодарский р-н с.Мичурино ул.Набережная д.17",
+  "fields": {
+   "province": "Павлодарская область",
+   "city": "Мичурино",
+   "district": "Павлодарский",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Набережная",
+   "house": "17",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "street_name_is_type_word:street_name"
+  ]
+ },
+ {
+  "raw_address": "Nur-Sultan, Kabanbay batyr 53 blok B, 8 etazh, 7 podezd",
+  "fields": {
+   "province": "Астана",
+   "city": "Nur-Sultan",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Kabanbay batyr",
+   "house": "53/B",
+   "apartment": null,
+   "entrance": "7",
+   "floor": "8",
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Тараз, Жамбыла 140 литер А, оф 3, ориентир рынок Шахристан",
+  "fields": {
+   "province": null,
+   "city": "Тараз",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Жамбыла",
+   "house": "140/А",
+   "apartment": "3",
+   "entrance": null,
+   "floor": null,
+   "landmark": "рынок Шахристан"
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Костанай, пр-т Аль-Фараби 115 к2 кв 40, вход со двора",
+  "fields": {
+   "province": null,
+   "city": "Костанай",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Аль-Фараби",
+   "house": "115/2",
+   "apartment": "40",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ }
+]

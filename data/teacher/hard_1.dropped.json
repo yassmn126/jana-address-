@@ -1,0 +1,444 @@
+[
+ {
+  "raw_address": "Алматы, Бостндыкский райн, ул. Тимрязева 42 корпс 3, кв 15",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Бостндыкский",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Тимрязева",
+   "house": "42/3",
+   "apartment": "15",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Almaty, ул. Жандосова 58 кoрпус 3, кв 112",
+  "fields": {
+   "province": "Алматы",
+   "city": "Almaty",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Жандосова",
+   "house": "58/3",
+   "apartment": "112",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Петропавловск,ул.Интернациональная27корп2кв15",
+  "fields": {
+   "province": null,
+   "city": "Петропавловск",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Интернациональная",
+   "house": "27/2",
+   "apartment": "15",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Nur-Sultan, Qabanbai batyr dangyly 53 blok 2, 3 qabat",
+  "fields": {
+   "province": "Астана",
+   "city": "Nur-Sultan",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Qabanbai batyr",
+   "house": "53/2",
+   "apartment": null,
+   "entrance": null,
+   "floor": "3",
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "050000 Almaty, Raiymbek avenue 348 corpus 3, apt 9",
+  "fields": {
+   "province": "Алматы",
+   "city": "Almaty",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Raiymbek",
+   "house": "348/3",
+   "apartment": "9",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Almaty, Abylai khan ave 2 bldg 1 flat5",
+  "fields": {
+   "province": "Алматы",
+   "city": "Almaty",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Abylai khan",
+   "house": "2/1",
+   "apartment": "5",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Ақмола қаласы, Абай даңғылы 63, 18 пәтер",
+  "fields": {
+   "province": "Астана",
+   "city": "Акмола",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Абай",
+   "house": "63",
+   "apartment": "18",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:city"
+  ]
+ },
+ {
+  "raw_address": "Алматы, мкр Аксай-4, 12 корпус 2 блок 3, кв 41",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Аксай-4",
+   "house": "12/2/3",
+   "apartment": "41",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Уральск, ул. Жангир хана 49 лит. А",
+  "fields": {
+   "province": null,
+   "city": "Уральск",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Жангир хана",
+   "house": "49/А",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Караганда Бухар жырау 66 лит Б оф 12",
+  "fields": {
+   "province": null,
+   "city": "Караганда",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Бухар жырау",
+   "house": "66/Б",
+   "apartment": "12",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Жетысуский р-н, ул. Бекмаханова 93 корп. 2 блок А",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Жетысуский",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Бекмаханова",
+   "house": "93/2/А",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Актобе, Батыс-2 мкр, 15 дом, 3 корпус, 4 подъезд, 7 этаж, 98 кв, домофон 98, ориентир школа 51, получатель Айдос, тел 87013334455, доставка с 18 до 21, Актюбинская обл, РК",
+  "fields": {
+   "province": "Актюбинская область",
+   "city": "Актобе",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Батыс-2",
+   "house": "15/3",
+   "apartment": "98",
+   "entrance": "4",
+   "floor": "7",
+   "landmark": "школа 51"
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Талдыкорган, СТ Каратал, линия 9, участок 101 возле правления",
+  "fields": {
+   "province": null,
+   "city": "Талдыкорган",
+   "district": null,
+   "living_area": "Каратал",
+   "street_type": null,
+   "street_name": "линия 9",
+   "house": "101",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": "правления"
+  },
+  "errors": [
+   "street_name_has_type_word:street_name"
+  ]
+ },
+ {
+  "raw_address": "улица абая дом десятый квартира пять",
+  "fields": {
+   "province": null,
+   "city": null,
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "абая",
+   "house": "десятый",
+   "apartment": "пять",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "г Астана улица Кенесары дом сорок квартира сто двенадцать подъезд второй этаж седьмой",
+  "fields": {
+   "province": "Астана",
+   "city": "Астана",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Кенесары",
+   "house": "сорок",
+   "apartment": "сто двенадцать",
+   "entrance": "второй",
+   "floor": "седьмой",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:entrance",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Атырау, Авангард 4 мкр, дом тридцать, квартира девять",
+  "fields": {
+   "province": null,
+   "city": "Атырау",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Авангард 4",
+   "house": "тридцать",
+   "apartment": "девять",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Талдыкорган, Шевченко дом сто сорок, второй подъезд, пятый этаж, квартира тридцать шесть",
+  "fields": {
+   "province": null,
+   "city": "Талдыкорган",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Шевченко",
+   "house": "сто сорок",
+   "apartment": "тридцать шесть",
+   "entrance": "второй",
+   "floor": "пятый",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:entrance",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Актау 12 мкр дом 8 кв 41 третий подъезд возле Анвара",
+  "fields": {
+   "province": null,
+   "city": "Актау",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "12",
+   "house": "8",
+   "apartment": "41",
+   "entrance": "третий",
+   "floor": null,
+   "landmark": "Анвара"
+  },
+  "errors": [
+   "not_a_number:entrance"
+  ]
+ },
+ {
+  "raw_address": "живу в Петропавловске, Жамбыла 140, кв 7, домофон 7 вызов, второй этаж",
+  "fields": {
+   "province": null,
+   "city": "Петропавловске",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Жамбыла",
+   "house": "140",
+   "apartment": "7",
+   "entrance": null,
+   "floor": "второй",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Экибастуз, улица Мәшһүр Жүсіпа дом 66, квартира 104, подъезд шестой",
+  "fields": {
+   "province": null,
+   "city": "Экибастуз",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Мәшһүр Жүсіпа",
+   "house": "66",
+   "apartment": "104",
+   "entrance": "шестой",
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:entrance"
+  ]
+ },
+ {
+  "raw_address": "Тараз мкр Каратау дом пятнадцать кв двадцать",
+  "fields": {
+   "province": null,
+   "city": "Тараз",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Каратау",
+   "house": "пятнадцать",
+   "apartment": "двадцать",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Караганда, Юго-Восток, улица Муканова 55/2, кв 90, подъезд третий, этаж девятый",
+  "fields": {
+   "province": null,
+   "city": "Караганда",
+   "district": null,
+   "living_area": "Юго-Восток",
+   "street_type": "улица",
+   "street_name": "Муканова",
+   "house": "55/2",
+   "apartment": "90",
+   "entrance": "третий",
+   "floor": "девятый",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:entrance",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Петропавловск ул Интернациональная дом 23 корпус 1 квартира тринадцать",
+  "fields": {
+   "province": null,
+   "city": "Петропавловск",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Интернациональная",
+   "house": "23/1",
+   "apartment": "тринадцать",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ }
+]

@@ -1,0 +1,560 @@
+[
+ {
+  "raw_address": "Қарағандықаласы,Бұқаржыраудаңғылы49/2,61пәтер",
+  "fields": {
+   "province": null,
+   "city": "Караганда",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Бұқаржырау",
+   "house": "49/2",
+   "apartment": "61",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:city"
+  ]
+ },
+ {
+  "raw_address": "Алматы,Жандосова58корп2кв14",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Жандосова",
+   "house": "58/2",
+   "apartment": "14",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Астана,ЖКХайвилл,ул.А.Байтурсынулы1блокБкв210",
+  "fields": {
+   "province": "Астана",
+   "city": "Астана",
+   "district": null,
+   "living_area": "Хайвилл",
+   "street_type": "улица",
+   "street_name": "А.Байтурсынулы",
+   "house": "1/Б",
+   "apartment": "210",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Кокшетау, ул.Абая 105 , корупс 2, кв 7",
+  "fields": {
+   "province": null,
+   "city": "Кокшетау",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Абая",
+   "house": "105/2",
+   "apartment": "7",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "5 этаж 19 кв 8 дом 2 корпус Кабанбай батыра Астана",
+  "fields": {
+   "province": "Астана",
+   "city": "Астана",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Кабанбай батыра",
+   "house": "8/2",
+   "apartment": "19",
+   "entrance": null,
+   "floor": "5",
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Бостандыкский р-н, ул. Тимирязева 42 kорпус 3, кв 15",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Бостандыкский",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Тимирязева",
+   "house": "42/3",
+   "apartment": "15",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Бостандыкский р-н, ул. Тимирязева 42 корпус 2 блок 3, кв 7",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Бостандыкский",
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Тимирязева",
+   "house": "42/2/3",
+   "apartment": "7",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Атырау ул.Сатпаева 19 лит. А",
+  "fields": {
+   "province": null,
+   "city": "Атырау",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Сатпаева",
+   "house": "19/А",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Жезказган, пр-т Алашахана 21 лит Б",
+  "fields": {
+   "province": null,
+   "city": "Жезказган",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Алашахана",
+   "house": "21/Б",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Балхаш, ул. Ленина 3 к2 кв 15",
+  "fields": {
+   "province": null,
+   "city": "Балхаш",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Ленина",
+   "house": "3/2",
+   "apartment": "15",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Атырау, мкр Нурсая, ул. Абулхаир хана 64Г лит А1, оф 205",
+  "fields": {
+   "province": null,
+   "city": "Атырау",
+   "district": null,
+   "living_area": "Нурсая",
+   "street_type": "улица",
+   "street_name": "Абулхаир хана",
+   "house": "64Г/А1",
+   "apartment": "205",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "РК, ВКО, 070004, г. Усть-Каменогорск, пр. Независимости 25 кор 1 кв 140 п 4 эт 9 домофон 140, получатель Иванова Т.А., т. 8 (7232) 25-40-11, доставить до 12:00",
+  "fields": {
+   "province": "Восточно-Казахстанская область",
+   "city": "Усть-Каменогорск",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Независимости",
+   "house": "25/1",
+   "apartment": "140",
+   "entrance": "4",
+   "floor": "9",
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "алло, улица абая дом десятый квартира пять, Алматы",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "абая",
+   "house": "десятый",
+   "apartment": "пять",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "караганда улица ерубаева дом сорок два квартира восемнадцать третий этаж",
+  "fields": {
+   "province": null,
+   "city": "караганда",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "ерубаева",
+   "house": "сорок два",
+   "apartment": "восемнадцать",
+   "entrance": null,
+   "floor": "третий",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Актобе 12 микрорайон дом двадцать пять подъезд второй квартира 40",
+  "fields": {
+   "province": null,
+   "city": "Актобе",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "12",
+   "house": "двадцать пять",
+   "apartment": "40",
+   "entrance": "второй",
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:entrance"
+  ]
+ },
+ {
+  "raw_address": "Костанай, ул. Баймагамбетова, дом сто девяносто три, подъезд четыре, этаж пять, квартира семьдесят",
+  "fields": {
+   "province": null,
+   "city": "Костанай",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Баймагамбетова",
+   "house": "сто девяносто три",
+   "apartment": "семьдесят",
+   "entrance": "четыре",
+   "floor": "пять",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:entrance",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Актау, 5 мкр, дом 7, квартира 33, первый подъезд, домофон не работает",
+  "fields": {
+   "province": null,
+   "city": "Актау",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "5",
+   "house": "7",
+   "apartment": "33",
+   "entrance": "первый",
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:entrance"
+  ]
+ },
+ {
+  "raw_address": "Астана, Есильский район, проспект Мангилик Ел, дом 55 корпус 2, квартира сто сорок",
+  "fields": {
+   "province": "Астана",
+   "city": "Астана",
+   "district": "Есильский",
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Мангилик Ел",
+   "house": "55/2",
+   "apartment": "сто сорок",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Талдыкорган, мкр Каратал, дом сорок, кв двенадцать, второй этаж, ориентир остановка Дом быта",
+  "fields": {
+   "province": null,
+   "city": "Талдыкорган",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Каратал",
+   "house": "сорок",
+   "apartment": "двенадцать",
+   "entrance": null,
+   "floor": "второй",
+   "landmark": "остановка Дом быта"
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Жезказган пр Металлургов дом номер двенадцать кв номер тридцать четыре",
+  "fields": {
+   "province": null,
+   "city": "Жезказган",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Металлургов",
+   "house": "двенадцать",
+   "apartment": "тридцать четыре",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Экибастуз, улица Машхур Жусупа, дом сто семнадцать, квартира девять, подъезд третий, этаж четвёртый",
+  "fields": {
+   "province": null,
+   "city": "Экибастуз",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Машхур Жусупа",
+   "house": "сто семнадцать",
+   "apartment": "девять",
+   "entrance": "третий",
+   "floor": "четвёртый",
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:entrance",
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Темиртау 7 микрорайон дом двадцать первый квартира шестьдесят шесть",
+  "fields": {
+   "province": null,
+   "city": "Темиртау",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "7",
+   "house": "двадцать первый",
+   "apartment": "шестьдесят шесть",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Шымкент, мкр Нурсат дом сто восемнадцать кв пять возле школы №65",
+  "fields": {
+   "province": "Шымкент",
+   "city": "Шымкент",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Нурсат",
+   "house": "сто восемнадцать",
+   "apartment": "пять",
+   "entrance": null,
+   "floor": null,
+   "landmark": "школы №65"
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Усть-Каменогорск, ВКО, проспект Независимости, дом номер один, квартира номер сорок пять",
+  "fields": {
+   "province": "Восточно-Казахстанская область",
+   "city": "Усть-Каменогорск",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Независимости",
+   "house": "один",
+   "apartment": "сорок пять",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Ауэзовский район, мкр Аксай 3а, дом пятьдесят девять, квартира семьдесят, позвонить за час",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Ауэзовский",
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Аксай 3а",
+   "house": "пятьдесят девять",
+   "apartment": "семьдесят",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Байконыр, улица Гагарина, дом двадцать, квартира восемь, напротив почты",
+  "fields": {
+   "province": null,
+   "city": "Байконыр",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Гагарина",
+   "house": "двадцать",
+   "apartment": "восемь",
+   "entrance": null,
+   "floor": null,
+   "landmark": "почты"
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ },
+ {
+  "raw_address": "Алматы, на углу Абая и Достык, БЦ Достык, офис 512, пятый этаж",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Абая",
+   "house": null,
+   "apartment": "512",
+   "entrance": null,
+   "floor": "пятый",
+   "landmark": "БЦ Достык"
+  },
+  "errors": [
+   "not_a_number:floor"
+  ]
+ },
+ {
+  "raw_address": "Петропавловск, СКО, ул. Конституции Казахстана, дом номер двадцать восемь, квартира три, второй подъезд",
+  "fields": {
+   "province": "Северо-Казахстанская область",
+   "city": "Петропавловск",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Конституции Казахстана",
+   "house": "двадцать восемь",
+   "apartment": "три",
+   "entrance": "второй",
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment",
+   "not_a_number:entrance"
+  ]
+ },
+ {
+  "raw_address": "Атырау, Авангард 3 мкр, дом пятидесятый, кв двадцать три",
+  "fields": {
+   "province": null,
+   "city": "Атырау",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "Авангард 3",
+   "house": "пятидесятый",
+   "apartment": "двадцать три",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_a_number:apartment"
+  ]
+ }
+]

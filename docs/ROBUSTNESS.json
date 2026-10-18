@@ -37,9 +37,9 @@
    "changed": 0
   },
   "commas_to_spaces": {
-   "score": 98.98,
-   "consistency": 98.32,
-   "changed": 7
+   "score": 99.44,
+   "consistency": 99.04,
+   "changed": 4
   },
   "bom_prefix": {
    "score": 100.0,
@@ -62,9 +62,9 @@
    "changed": 0
   },
   "note_suffix": {
-   "score": 99.96,
-   "consistency": 99.76,
-   "changed": 1
+   "score": 100.0,
+   "consistency": 100.0,
+   "changed": 0
   },
   "trailing_dot": {
    "score": 99.96,
@@ -88,23 +88,23 @@
   },
   "homoglyph_30": {
    "score": 100.0,
-   "consistency": 99.76,
-   "changed": 1
+   "consistency": 100.0,
+   "changed": 0
   },
   "homoglyph_all": {
-   "score": 99.47,
+   "score": 99.77,
    "consistency": 97.6,
    "changed": 10
   },
   "wrong_layout_words": {
    "score": 98.42,
-   "consistency": 93.75,
-   "changed": 26
+   "consistency": 95.43,
+   "changed": 19
   },
   "wrong_layout_all": {
-   "score": 99.58,
-   "consistency": 98.32,
-   "changed": 7
+   "score": 99.85,
+   "consistency": 98.8,
+   "changed": 5
   }
  },
  "categories": {

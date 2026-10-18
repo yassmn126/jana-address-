@@ -1,0 +1,211 @@
+[
+ {
+  "raw_address": "Астана, ул. Ахмет Байтұрсынұлы 9, ЖК Highvill, блок С3, кв 45",
+  "fields": {
+   "province": "Астана",
+   "city": "Астана",
+   "district": null,
+   "living_area": "Highvill",
+   "street_type": "улица",
+   "street_name": "Ахмет Байтұрсынұлы",
+   "house": "9/С3",
+   "apartment": "45",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Экібастұз қ., Мәшһүр Жүсіп көшесі 64/1, 22 пәтер, 2 кіреберіс",
+  "fields": {
+   "province": null,
+   "city": "Экибастуз",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Мәшһүр Жүсіп",
+   "house": "64/1",
+   "apartment": "22",
+   "entrance": "2",
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:city"
+  ]
+ },
+ {
+  "raw_address": "Рудный, СТ Горняк, линия 7, дача 21",
+  "fields": {
+   "province": null,
+   "city": "Рудный",
+   "district": null,
+   "living_area": "Горняк",
+   "street_type": null,
+   "street_name": "линия 7",
+   "house": "21",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "street_name_has_type_word:street_name"
+  ]
+ },
+ {
+  "raw_address": "Atyrau, Satpaev st. 3 bld 2, apt 47",
+  "fields": {
+   "province": null,
+   "city": "Atyrau",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Satpaev",
+   "house": "3/2",
+   "apartment": "47",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "astana, Kabanbay batyr 53 blok 4 kv 210 opposite Mega Silk Way",
+  "fields": {
+   "province": "Астана",
+   "city": "astana",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Kabanbay batyr",
+   "house": "53/4",
+   "apartment": "210",
+   "entrance": null,
+   "floor": null,
+   "landmark": "Mega Silk Way"
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Батыс Қазақстан облысы, Ақсай қаласы, Достық көшесі 3, 15 пәтер",
+  "fields": {
+   "province": "Западно-Казахстанская область",
+   "city": "Аксай",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Достық",
+   "house": "3",
+   "apartment": "15",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:city"
+  ]
+ },
+ {
+  "raw_address": "Кокшетау ул Абая 96 к2 кв 31",
+  "fields": {
+   "province": null,
+   "city": "Кокшетау",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Абая",
+   "house": "96/2",
+   "apartment": "31",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Тараз, Жамбыла 128 литер А",
+  "fields": {
+   "province": null,
+   "city": "Тараз",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Жамбыла",
+   "house": "128/А",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Бостандыкский район, Тимирязева 42к15, кв 7",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Бостандыкский",
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Тимирязева",
+   "house": "42/15",
+   "apartment": "7",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Алматы, Жетысуский р-н, Северное кольцо 86 лит. Г",
+  "fields": {
+   "province": "Алматы",
+   "city": "Алматы",
+   "district": "Жетысуский",
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Северное кольцо",
+   "house": "86/Г",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "павлодар, ул. естая 81\"А\", кв.9",
+  "fields": {
+   "province": null,
+   "city": "павлодар",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "естая",
+   "house": "81А",
+   "apartment": "9",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ }
+]

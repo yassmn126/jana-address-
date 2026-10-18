@@ -116,10 +116,11 @@ def test_arbiter_confident_model_overrides_fallback_rule():
     parser, rp = _rp(raw)
     assert rp.spans["STREET_NAME"].rule == "fallback_word_number"
     arbitrate(rp, [_ms("STREET_NAME", raw, "Костанай, Наримановская", 0.95)], parser)
-    # overlaps the CITY span → the lower-scored span is dropped; CITY (0.8) < model (0.95), so city is dropped
+    # the model span swallows the known city at its edge → trimmed to «Наримановская» (= the rule span); the city stays
     fields, _ = assemble(rp)
-    assert fields["street_name"] == "Костанай, Наримановская"
-    assert "arb_city_overlap_dropped" in rp.flags
+    assert fields["street_name"] == "Наримановская"
+    assert fields["city"] == "Костанай"
+    assert "arb_street_name_agree" in rp.flags
 
 
 def test_arbiter_rejects_invalid_house_from_model():
