@@ -164,11 +164,10 @@ function NextStep() {
 /* ------------------------------------------------------------------ search → records page */
 
 function RecordSearch() {
-  const { query, setQuery, setMaxConf } = useSession();
   const navigate = useNavigate();
-  const [q, setQ] = useState(query);
+  const [q, setQ] = useState("");
   return (
-    <form className="search" role="search" onSubmit={(e) => { e.preventDefault(); setQuery(q.trim()); setMaxConf(1); navigate(PATHS.records); }}>
+    <form className="search" role="search" onSubmit={(e) => { e.preventDefault(); navigate(q.trim() ? `${PATHS.records}?q=${encodeURIComponent(q.trim())}` : PATHS.records); }}>
       <IconSearch />
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Адрес или ID" aria-label="Найти запись" />
     </form>
@@ -215,8 +214,8 @@ function QueueTable({ queue }: { queue: RecordOut[] }) {
           </thead>
           <tbody>
             {top.map((r) => (
-              <tr key={r.id} onClick={() => navigate(PATHS.record(r.id))} tabIndex={0}
-                onKeyDown={(e) => { if (e.key === "Enter") navigate(PATHS.record(r.id)); }}>
+              <tr key={r.id} onClick={() => navigate(`${PATHS.record(r.id)}?view=queue`)} tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter") navigate(`${PATHS.record(r.id)}?view=queue`); }}>
                 <td className="cell-main">
                   <span className="cell-title" title={r.raw_address}>{r.raw_address}</span>
                   <span className="cell-sub mono">{r.id}</span>

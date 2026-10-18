@@ -7,9 +7,9 @@ import { SPAN_CLASS, type RecordOut } from "../types";
 /** Status pill: colored dot + mono label. ok = moss, warn = amber, flag = coral, idle = neutral. */
 export type ChipStatus = "ok" | "warn" | "flag" | "idle";
 
-export function Chip({ status, children, title }: { status: ChipStatus; children: ReactNode; title?: string }) {
+export function Chip({ status, children, title, strong }: { status: ChipStatus; children: ReactNode; title?: string; strong?: boolean }) {
   return (
-    <span className={`chip chip-${status}`} title={title}>
+    <span className={`chip chip-${status} ${strong ? "is-strong" : ""}`} title={title}>
       <i className="chip-dot" aria-hidden="true" />
       {children}
     </span>
@@ -168,6 +168,16 @@ export const IconCheck = () => <I size={14} d={<path d="M20 6 9 17l-5-5" />} />;
 export const IconSearch = () => <I d={<><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>} />;
 export const IconArrowRight = () => <I size={16} d={<><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>} />;
 export const IconChevronRight = () => <I size={16} d={<path d="m9 6 6 6-6 6" />} />;
+export const IconChevronLeft = () => <I size={16} d={<path d="m15 6-6 6 6 6" />} />;
+export const IconChevronUp = () => <I size={16} d={<path d="m6 15 6-6 6 6" />} />;
+export const IconChevronDown = () => <I size={16} d={<path d="m6 9 6 6 6-6" />} />;
+export const IconArrowUp = () => <I size={13} d={<><path d="M12 19V5" /><path d="m6 11 6-6 6 6" /></>} />;
+export const IconArrowDown = () => <I size={13} d={<><path d="M12 5v14" /><path d="m6 13 6 6 6-6" /></>} />;
+export const IconSort = () => <I size={13} d={<><path d="m7 9 5-5 5 5" /><path d="m7 15 5 5 5-5" /></>} />;
+export const IconExternal = () => <I size={14} d={<><path d="M14 4h6v6" /><path d="M20 4 10 14" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>} />;
+export const IconUndo = () => <I size={16} d={<><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></>} />;
+export const IconMapPin = () => <I size={16} d={<><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z" /><circle cx="12" cy="9.5" r="2.5" /></>} />;
+export const IconSparkle = () => <I size={16} d={<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" />} />;
 export const IconClose = () => <I size={16} d={<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>} />;
 export const IconText = () => <I d={<><path d="M4 6h16" /><path d="M4 12h16" /><path d="M4 18h10" /></>} />;
 export const IconUpload = ({ size = 18 }: { size?: number }) => <I size={size} d={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></>} />;

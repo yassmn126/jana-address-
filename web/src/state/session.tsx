@@ -8,7 +8,6 @@ import { FIELDS, JURY_KEYS, type Field, type RecordOut } from "../types";
 import { useAssistant } from "./assistant";
 import { useService } from "./service";
 
-export type SortKey = "conf-asc" | "conf-desc" | "input";
 type Input = { id: string; raw_address: string };
 
 /** The operator's working set: the parsed records of this browser tab, their edits and the review progress. */
@@ -26,13 +25,10 @@ interface SessionCtx {
   parseOne: (raw: string) => Promise<RecordOut | null>;
   addRow: (rec: RecordOut) => void;
   update: (id: string, field: Field, value: string | null) => void;
-  accept: (r: RecordOut) => Promise<void>;
+  revert: (id: string) => void;
+  accept: (r: RecordOut) => Promise<boolean>;
   exportJson: () => void;
   clear: () => void;
-  // records page filters (kept here so they survive navigation)
-  sort: SortKey; setSort: (s: SortKey) => void;
-  maxConf: number; setMaxConf: (v: number) => void;
-  query: string; setQuery: (q: string) => void;
   showQueue: () => void;
 }
 
@@ -63,9 +59,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<SessionCtx["progress"]>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sort, setSort] = useState<SortKey>("conf-asc");
-  const [maxConf, setMaxConf] = useState(1);
-  const [query, setQuery] = useState("");
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
@@ -81,11 +74,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const stats = useMemo(() => computeStats(rows), [rows]);
 
-  const showQueue = useCallback(() => {
-    setMaxConf(Math.round((REVIEW_THRESHOLD - 0.01) * 100) / 100);
-    setSort("conf-asc");
-    navigate(PATHS.records);
-  }, [navigate]);
+  const showQueue = useCallback(() => navigate(PATHS.queue), [navigate]);
 
   const load = useCallback(async (input: Input[]) => {
     if (!input.length) return;
@@ -150,7 +139,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const addRow = useCallback((rec: RecordOut) => setRows((rs) => [rec, ...rs.filter((x) => x.id !== rec.id)]), []);
 
   const update = useCallback((id: string, field: Field, value: string | null) =>
-    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [field]: value === "" ? null : value, edited: true } : r))), []);
+    setRows((rs) => rs.map((r) => {
+      if (r.id !== id) return r;
+      const original = r.original ?? (Object.fromEntries(FIELDS.map((f) => [f, r[f]])) as Record<Field, string | null>);
+      const next = { ...r, [field]: value === "" ? null : value, original, reviewed: false };
+      return { ...next, edited: FIELDS.some((f) => next[f] !== original[f]) };
+    })), []);
+
+  const revert = useCallback((id: string) =>
+    setRows((rs) => rs.map((r) => (r.id === id && r.original ? { ...r, ...r.original, edited: false, original: undefined } : r))), []);
 
   const accept = useCallback(async (r: RecordOut) => {
     const fields = Object.fromEntries(FIELDS.map((f) => [f, r[f]])) as Record<string, string | null>;
@@ -158,10 +155,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (r.edited) await sendCorrection(r, fields);
       setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, reviewed: true } : x)));
       const left = rowsRef.current.filter((x) => x.id !== r.id && x.confidence < REVIEW_THRESHOLD && !x.reviewed).length;
-      if (left === 0) react("happy", "Очередь проверки пуста.");
-      else react("happy", `${r.id} принята. В очереди: ${left}.`, undefined, 3500);
+      if (left === 0 && r.confidence < REVIEW_THRESHOLD) react("happy", "Очередь проверки пуста.");
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      react("error", `${r.id}: исправление не отправлено.`);
+      return false;
     }
   }, [react]);
 
@@ -180,9 +179,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SessionCtx>(() => ({
     rows, stats, busy, progress, error, setError, lastRun,
-    load, loadFile, loadText, parseOne, addRow, update, accept, exportJson, clear,
-    sort, setSort, maxConf, setMaxConf, query, setQuery, showQueue,
-  }), [rows, stats, busy, progress, error, lastRun, load, loadFile, loadText, parseOne, addRow, update, accept, exportJson, clear, sort, maxConf, query, showQueue]);
+    load, loadFile, loadText, parseOne, addRow, update, revert, accept, exportJson, clear, showQueue,
+  }), [rows, stats, busy, progress, error, lastRun, load, loadFile, loadText, parseOne, addRow, update, revert, accept, exportJson, clear, showQueue]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

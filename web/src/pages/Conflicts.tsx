@@ -1,37 +1,38 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { listConflicts, resolveConflict, scanConflicts } from "../api";
+import { Drawer } from "../components/Drawer";
 import { PageHeader } from "../components/layout/PageHeader";
+import { Mascot } from "../components/Mascot";
+import { SearchField, Segmented, TableCard } from "../components/table";
+import { Chip, ConfChip, IconCheck, IconChevronRight, IconCompare, IconText, type ChipStatus } from "../components/ui";
+import { ADDRESSES, count, fmtInt, fmtScore, fmtWhen } from "../format";
 import { useAssistant } from "../state/assistant";
 import { useService } from "../state/service";
 import { useSession } from "../state/session";
-import { Chip, IconCheck, IconCompare, type ChipStatus } from "../components/ui";
 import {
   FIELDS, FIELD_LABELS,
   type Conflict, type ConflictCounts, type ConflictReason, type ConflictStatus, type Decision, type Field, type ScanResult, type Side,
 } from "../types";
 
-/** The "external AI" options of eval/llm_verify.py (training/label_llm.py PROVIDERS). */
+/** The external labelers of eval/llm_verify.py (training/label_llm.py PROVIDERS). */
 const PROVIDERS = [
-  { id: "openai-compatible", label: "Локальный LLM · openai-compatible", model: "", hint: "vLLM в кампусе: OPENAI_BASE_URL, данные не уходят наружу" },
-  { id: "rules", label: "Только правила · rules", model: "rules", hint: "без сети и ИИ — проверка самой цепочки" },
+  { id: "openai-compatible", label: "Локальный LLM", model: "" },
+  { id: "rules", label: "Только правила", model: "rules" },
 ];
 const PROVIDER_KEY = "jana-address/conflicts/provider";
 
 const REASON: Record<ConflictReason, { label: string; status: ChipStatus }> = {
   disagreement: { label: "расхождение", status: "flag" },
   low_confidence: { label: "низкая уверенность", status: "warn" },
-  ai_issue: { label: "ИИ переписал значение", status: "warn" },
+  ai_issue: { label: "ИИ дописал значение", status: "warn" },
   ai_error: { label: "ИИ не ответил", status: "idle" },
 };
-const CHOICE_LABEL: Record<string, string> = { ours: "локальная модель", ai: "AI API", custom: "выбор оператора", dismiss: "отклонено" };
-const TABS: { status: ConflictStatus; label: string }[] = [
-  { status: "pending", label: "Ожидают" },
-  { status: "resolved", label: "Решены" },
-  { status: "dismissed", label: "Отклонены" },
-];
+const CHOICE_LABEL: Record<string, string> = { ours: "локальная модель", ai: "ИИ", custom: "выбор оператора", dismiss: "отклонено" };
+const STATUSES: ConflictStatus[] = ["pending", "resolved", "dismissed"];
 
-const when = (ts: number | null) => (ts ? new Date(ts * 1000).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "");
-const Value = ({ v }: { v: string | null | undefined }) => (v ? <>{v}</> : <span className="nil">null</span>);
+const conflictPath = (id: string) => `/conflicts/${encodeURIComponent(id)}`;
+const Value = ({ v }: { v: string | null | undefined }) => (v ? <>{v}</> : <span className="nil">пусто</span>);
 
 type Picks = Partial<Record<Field, Side>>;
 type Overrides = Partial<Record<Field, string>>;
@@ -40,34 +41,32 @@ export function Conflicts() {
   const { react } = useAssistant();
   const { setConflictsPending } = useService();
   const { rows } = useSession();
-  const [status, setStatus] = useState<ConflictStatus>("pending");
+  const { id } = useParams();
+  const { search } = useLocation();
+  const navigate = useNavigate();
+  const [sp, setSp] = useSearchParams();
+  const status = (STATUSES.includes(sp.get("status") as ConflictStatus) ? sp.get("status") : "pending") as ConflictStatus;
+  const q = sp.get("q") ?? "";
+
   const [items, setItems] = useState<Conflict[]>([]);
   const [counts, setCounts] = useState<ConflictCounts>({ pending: 0, resolved: 0, dismissed: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState(() => {
-    try { return localStorage.getItem(PROVIDER_KEY) || "anthropic"; } catch { return "anthropic"; }
-  });
-  const [model, setModel] = useState(() => PROVIDERS.find((p) => p.id === provider)?.model ?? "");
-  const [paste, setPaste] = useState("");
-  const [scanning, setScanning] = useState<string | null>(null);
-  const [lastScan, setLastScan] = useState<ScanResult | null>(null);
   const [picks, setPicks] = useState<Record<string, Picks>>({});
   const [overrides, setOverrides] = useState<Record<string, Overrides>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
 
   const applyCounts = useCallback((c: ConflictCounts) => { setCounts(c); setConflictsPending(c.pending); }, [setConflictsPending]);
 
   const load = useCallback(async (s: ConflictStatus) => {
     setLoading(true);
     try {
-      const res = await listConflicts(s);
+      const res = await listConflicts(s, 500);
       setItems(res.items);
       applyCounts(res.counts);
       setError(null);
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -75,65 +74,42 @@ export function Conflicts() {
 
   useEffect(() => { load(status); }, [status, load]);
 
-  const chooseProvider = (id: string) => {
-    setProvider(id);
-    setModel(PROVIDERS.find((p) => p.id === id)?.model ?? "");
-    try { localStorage.setItem(PROVIDER_KEY, id); } catch { /* storage blocked */ }
-  };
+  const setParam = (patch: Record<string, string | null>) => setSp((prev) => {
+    const n = new URLSearchParams(prev);
+    for (const [k, v] of Object.entries(patch)) { if (!v || (k === "status" && v === "pending")) n.delete(k); else n.set(k, v); }
+    return n;
+  }, { replace: true });
 
-  // ---------------------------------------------------------------- scan: local parser vs AI → queue (≤ 50 per call)
-  const scan = async (records: { id: string; raw_address: string }[]) => {
-    if (!records.length) return;
-    setError(null);
-    const total = { scanned: 0, needs_review: 0, queued: 0, updated: 0, kept_decided: 0 };
-    let last: ScanResult | null = null;
-    react("waiting", `Сравниваю ${records.length} адресов с ИИ…`, undefined, 600000);
-    try {
-      for (let i = 0; i < records.length; i += 50) {
-        setScanning(`${Math.min(i + 50, records.length)} / ${records.length}`);
-        last = await scanConflicts(records.slice(i, i + 50), provider, model);
-        for (const k of Object.keys(total) as (keyof typeof total)[]) total[k] += last[k];
-      }
-      if (last) {
-        setLastScan({ ...last, ...total });
-        applyCounts(last.counts);
-      }
-      if (total.needs_review) react("confused", `Нашёл ${total.needs_review} из ${total.scanned}, где нужен человек. Решите их ниже.`, undefined, 9000);
-      else react("happy", `ИИ согласен со всеми ${total.scanned} ответами — конфликтов нет.`);
-      if (status !== "pending") setStatus("pending"); else load("pending");
-    } catch (e) {
-      const msg = String(e instanceof Error ? e.message : e);
-      setError(msg);
-      react("error", "Сравнение с ИИ не выполнено.");
-    } finally {
-      setScanning(null);
-    }
-  };
+  const list = useMemo(() => {
+    if (!q) return items;
+    const s = q.toLowerCase();
+    return items.filter((c) => c.raw_address.toLowerCase().includes(s) || c.record_id.toLowerCase().includes(s));
+  }, [items, q]);
 
-  const scanRows = () => scan(rows.map((r) => ({ id: r.id, raw_address: r.raw_address })));
-  const scanPaste = () => {
-    const lines = paste.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    scan(lines.map((l, i) => ({ id: `conflict_${Date.now()}_${i + 1}`, raw_address: l })));
-  };
+  const selected = id ? items.find((c) => c.conflict_id === id) ?? null : null;
+  const idx = selected ? list.findIndex((c) => c.conflict_id === selected.conflict_id) : -1;
+  const open = useCallback((cid: string | null) => {
+    navigate({ pathname: cid ? conflictPath(cid) : "/conflicts", search }, { replace: !!id && !!cid });
+  }, [navigate, search, id]);
 
-  // ---------------------------------------------------------------- decide
+  // ---------------------------------------------------------------- decide, then move to the next pending conflict
   const decide = useCallback(async (c: Conflict, decision: Decision) => {
+    const i = list.findIndex((x) => x.conflict_id === c.conflict_id);
+    const after = list[i + 1]?.conflict_id ?? list[i - 1]?.conflict_id ?? null;
     setBusyId(c.conflict_id);
     try {
       const res = await resolveConflict(c.conflict_id, { reviewer: "operator", ...decision });
       setItems((xs) => xs.filter((x) => x.conflict_id !== c.conflict_id));
       applyCounts(res.counts);
-      const left = res.counts.pending;
-      const what = decision.choice === "dismiss" ? "Отклонено" : `Сохранено (${CHOICE_LABEL[decision.choice]})`;
-      if (left === 0) react("happy", `${what}. Очередь конфликтов пуста!`);
-      else react("happy", `${what}. Осталось решить: ${left}.`, undefined, 3500);
+      if (res.counts.pending === 0) react("happy", "Все конфликты решены.");
+      open(after);
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+      setError(e instanceof Error ? e.message : String(e));
       react("error", "Решение не сохранено.");
     } finally {
       setBusyId(null);
     }
-  }, [applyCounts, react]);
+  }, [list, applyCounts, react, open]);
 
   const customDecision = (c: Conflict): Decision => {
     const typed = overrides[c.conflict_id] ?? {};
@@ -142,118 +118,199 @@ export function Conflicts() {
     return { choice: "custom", picks: picks[c.conflict_id] ?? {}, fields };
   };
 
-  // 1 = keep local · 2 = take AI · D = dismiss — on the card under the pointer / with focus
-  useEffect(() => {
-    if (status !== "pending") return;
-    const h = (ev: KeyboardEvent) => {
-      const tag = (ev.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || busyId) return;
-      const c = items.find((x) => x.conflict_id === activeId);
-      if (!c) return;
-      if (ev.key === "1") decide(c, { choice: "ours" });
-      else if (ev.key === "2") decide(c, { choice: "ai" });
-      else if (ev.code === "KeyD") decide(c, { choice: "dismiss" });
-      else return;
-      ev.preventDefault();
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [status, items, activeId, busyId, decide]);
-
-  const prov = PROVIDERS.find((p) => p.id === provider);
-
   return (
     <>
-      <PageHeader title="Конфликты" meta={`ждут решения: ${counts.pending} · решены: ${counts.resolved} · отклонены: ${counts.dismissed}`} />
-      <div className="content">
+      <PageHeader title="Конфликты" meta={`ждут решения ${fmtInt(counts.pending)} · решены ${fmtInt(counts.resolved)} · отклонены ${fmtInt(counts.dismissed)}`} />
 
-      {/* Scan: compare the local parser with the AI labeler and queue what needs a human */}
-      <section className="card scan">
-        <div className="scan-intro">
-          <p className="eyebrow muted">Проверка через ИИ</p>
-          <p>В очередь попадает запись, если поля расходятся, уверенность модели ниже 0,70 или ИИ переписал значение, которого нет в строке.</p>
-        </div>
-        <div className="scan-controls">
-          <label className="scan-field">
-            <span className="metric-label">Внешний ИИ</span>
-            <select className="field" value={provider} onChange={(e) => chooseProvider(e.target.value)}>
-              {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
-            <span className="muted scan-hint">{prov?.hint}</span>
-          </label>
-          <label className="scan-field">
-            <span className="metric-label">Модель</span>
-            <input className="field mono" value={model} onChange={(e) => setModel(e.target.value)} placeholder="имя модели на сервере" spellCheck={false} />
-          </label>
-          <div className="scan-actions">
-            <button type="button" className="btn btn-primary" onClick={scanRows} disabled={!!scanning || !rows.length}>
-              <IconCompare />{rows.length ? `Проверить загруженные (${rows.length})` : "Нет загруженных записей"}
-            </button>
-            <textarea className="field" rows={2} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="или вставьте адреса, по одному в строке" />
-            <button type="button" className="btn btn-ghost btn-sm" onClick={scanPaste} disabled={!!scanning || !paste.trim()}>Проверить вставленные</button>
+      <div className={`content ${selected ? "has-drawer" : ""}`}>
+        <ScanPanel onScanned={(c) => { applyCounts(c); if (status !== "pending") setParam({ status: null }); else load("pending"); }} rowsCount={rows.length} />
+
+        {error && <div className="error" role="alert">{error}</div>}
+
+        <TableCard
+          toolbar={
+            <>
+              <Segmented<ConflictStatus> label="Статус" value={status} onChange={(v) => { setParam({ status: v }); if (id) navigate({ pathname: "/conflicts", search: v === "pending" ? "" : `?status=${v}` }); }}
+                options={[
+                  { value: "pending", label: "Ждут решения", count: counts.pending, tone: "flag" },
+                  { value: "resolved", label: "Решены", count: counts.resolved },
+                  { value: "dismissed", label: "Отклонены", count: counts.dismissed },
+                ]} />
+              <div className="toolbar-right">
+                <SearchField value={q} onChange={(v) => setParam({ q: v })} label="Адрес или ID" />
+              </div>
+            </>
+          }
+        >
+          <div className="table-scroll">
+            <table className="dtable">
+              <thead>
+                <tr>
+                  <th>Адрес</th>
+                  <th className="col-opt">Поля</th>
+                  <th>{status === "pending" ? "Причина" : "Решение"}</th>
+                  <th className="num">Уверенность</th>
+                  <th className="col-opt">{status === "pending" ? "Создан" : "Решён"}</th>
+                  <th aria-label="Открыть" />
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((c) => (
+                  <tr key={c.conflict_id} className={c.conflict_id === selected?.conflict_id ? "is-selected" : ""} tabIndex={0}
+                    onClick={() => open(c.conflict_id)} onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) open(c.conflict_id); }}>
+                    <td className="cell-main">
+                      <span className="cell-title" title={c.raw_address}>{c.raw_address}</span>
+                      <span className="cell-sub mono">{c.record_id}</span>
+                    </td>
+                    <td className="col-opt">
+                      <span className="field-tags">
+                        {c.disagreements.slice(0, 2).map((f) => <span key={f} className="field-tag">{FIELD_LABELS[f]}</span>)}
+                        {c.disagreements.length > 2 && <span className="field-tag is-more" title={c.disagreements.slice(2).map((f) => FIELD_LABELS[f]).join(", ")}>+{c.disagreements.length - 2}</span>}
+                        {!c.disagreements.length && <span className="muted">совпадают</span>}
+                      </span>
+                    </td>
+                    <td>
+                      {status === "pending"
+                        ? c.reasons[0] && <Chip status={REASON[c.reasons[0]].status}>{REASON[c.reasons[0]].label}{c.reasons.length > 1 ? ` +${c.reasons.length - 1}` : ""}</Chip>
+                        : <Chip status={c.status === "dismissed" ? "idle" : "ok"}>{CHOICE_LABEL[c.resolution?.choice ?? "dismiss"]}</Chip>}
+                    </td>
+                    <td className="num">{c.confidence != null ? <ConfChip c={c.confidence} /> : <span className="muted">нет</span>}</td>
+                    <td className="nowrap muted col-opt">{fmtWhen(((status === "pending" ? c.created_at : c.resolved_at) ?? c.updated_at) * 1000)}</td>
+                    <td className="cell-go"><IconChevronRight /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!list.length && (
+              <div className="table-empty">
+                {loading ? <p className="muted">Загрузка…</p> : (
+                  <>
+                    <Mascot pose={status === "pending" && !q ? "celebrating" : "magnifier"} className="table-empty-mascot" />
+                    <p>{q ? "Нет конфликтов по запросу" : status === "pending" ? "Нет конфликтов, ждущих решения" : status === "resolved" ? "Решённых конфликтов нет" : "Отклонённых конфликтов нет"}</p>
+                  </>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-        {(scanning || lastScan) && (
-          <div className="scan-status">
-            {scanning
-              ? <Chip status="idle">сравниваю… {scanning}</Chip>
-              : lastScan && <>
-                  <Chip status="idle">проверено {lastScan.scanned}</Chip>
-                  <Chip status={lastScan.needs_review ? "flag" : "ok"}>к человеку {lastScan.needs_review}</Chip>
-                  <Chip status="idle">новых {lastScan.queued} · обновлено {lastScan.updated} · уже решены {lastScan.kept_decided}</Chip>
-                </>}
-          </div>
-        )}
-      </section>
-
-      {error && <div className="error" role="alert">{error}</div>}
-
-      {/* Queue */}
-      <div className="queue-head">
-        <div className="seg" role="tablist" aria-label="Статус">
-          {TABS.map((t) => (
-            <button key={t.status} type="button" role="tab" aria-selected={status === t.status}
-              className={`seg-btn ${status === t.status ? "is-active" : ""}`} onClick={() => setStatus(t.status)}>
-              {t.label}<span className={`seg-count ${t.status === "pending" && counts.pending ? "flag" : ""}`}>{counts[t.status]}</span>
-            </button>
-          ))}
-        </div>
-        {status === "pending" && items.length > 0 && (
-          <div className="hotkeys"><span><kbd>1</kbd> локальная</span><span><kbd>2</kbd> ИИ</span><span><kbd>D</kbd> отклонить</span><span>· на карточке под курсором</span></div>
-        )}
+        </TableCard>
       </div>
 
-      {loading && !items.length ? <div className="card empty">Загружаю очередь…</div>
-        : !items.length ? (
-          <div className="card empty">
-            {status === "pending" ? "Очередь пуста. Проверьте записи через ИИ — расхождения появятся здесь." : "Пока ничего."}
-          </div>
-        ) : (
-          <div className="conflicts">
-            {items.map((c) => (
-              <ConflictCard key={c.conflict_id} c={c}
-                picks={picks[c.conflict_id] ?? {}} overrides={overrides[c.conflict_id] ?? {}}
-                busy={busyId === c.conflict_id} active={activeId === c.conflict_id}
-                onActivate={() => setActiveId(c.conflict_id)}
-                onPick={(f, side) => setPicks((p) => ({ ...p, [c.conflict_id]: { ...p[c.conflict_id], [f]: side } }))}
-                onType={(f, v) => setOverrides((o) => ({ ...o, [c.conflict_id]: { ...o[c.conflict_id], [f]: v } }))}
-                onDecide={(d) => decide(c, d === "custom" ? customDecision(c) : { choice: d })}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {selected && (
+        <ConflictDrawer c={selected} position={idx >= 0 ? `${idx + 1} из ${list.length}` : undefined}
+          picks={picks[selected.conflict_id] ?? {}} overrides={overrides[selected.conflict_id] ?? {}} busy={busyId === selected.conflict_id}
+          onClose={() => open(null)}
+          onPrev={idx > 0 ? () => open(list[idx - 1].conflict_id) : undefined}
+          onNext={idx >= 0 && idx < list.length - 1 ? () => open(list[idx + 1].conflict_id) : undefined}
+          onPick={(f, side) => setPicks((p) => ({ ...p, [selected.conflict_id]: { ...p[selected.conflict_id], [f]: side } }))}
+          onType={(f, v) => setOverrides((o) => ({ ...o, [selected.conflict_id]: { ...o[selected.conflict_id], [f]: v } }))}
+          onDecide={(d) => decide(selected, d === "custom" ? customDecision(selected) : { choice: d })} />
+      )}
     </>
   );
 }
 
-function ConflictCard({ c, picks, overrides, busy, active, onActivate, onPick, onType, onDecide }: {
+/* ------------------------------------------------------------------ scan: local parser vs external labeler → queue */
+
+function ScanPanel({ onScanned, rowsCount }: { onScanned: (c: ConflictCounts) => void; rowsCount: number }) {
+  const { react } = useAssistant();
+  const { rows } = useSession();
+  const [provider, setProvider] = useState(() => {
+    try { const v = localStorage.getItem(PROVIDER_KEY); if (PROVIDERS.some((p) => p.id === v)) return v as string; } catch { /* storage blocked */ }
+    return PROVIDERS[0].id;
+  });
+  const [model, setModel] = useState(() => PROVIDERS.find((p) => p.id === provider)?.model ?? "");
+  const [pasting, setPasting] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [scanning, setScanning] = useState<string | null>(null);
+  const [last, setLast] = useState<ScanResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = (pid: string) => {
+    setProvider(pid);
+    setModel(PROVIDERS.find((p) => p.id === pid)?.model ?? "");
+    try { localStorage.setItem(PROVIDER_KEY, pid); } catch { /* storage blocked */ }
+  };
+
+  const scan = async (records: { id: string; raw_address: string }[]) => {
+    if (!records.length) return;
+    setError(null);
+    const total = { scanned: 0, needs_review: 0, queued: 0, updated: 0, kept_decided: 0 };
+    let res: ScanResult | null = null;
+    try {
+      for (let i = 0; i < records.length; i += 50) {
+        setScanning(`${Math.min(i + 50, records.length)} из ${records.length}`);
+        res = await scanConflicts(records.slice(i, i + 50), provider, model);
+        for (const k of Object.keys(total) as (keyof typeof total)[]) total[k] += res[k];
+      }
+      if (res) { setLast({ ...res, ...total }); onScanned(res.counts); }
+      if (total.needs_review) react("confused", `${count(total.needs_review, ADDRESSES)} из ${total.scanned} требуют решения.`, undefined, 9000);
+      else react("happy", `ИИ согласен со всеми ${total.scanned} ответами.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      react("error", "Сверка с ИИ не выполнена.");
+    } finally {
+      setScanning(null);
+    }
+  };
+
+  const lines = paste.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  return (
+    <section className="card scan">
+      <div className="scan-row">
+        <div className="scan-title">
+          <span className="scan-icon"><IconCompare /></span>
+          <div>
+            <h3>Сверка с внешним ИИ</h3>
+            <p className="muted">В очередь попадает запись с расхождением полей, уверенностью ниже 0,70 или значением, которого нет в строке.</p>
+          </div>
+        </div>
+        <div className="scan-controls">
+          <select className="field select-pill" value={provider} onChange={(e) => choose(e.target.value)} aria-label="Внешний ИИ">
+            {PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+          <label className="inline-field">
+            <span>Модель</span>
+            <input className="mono" value={model} onChange={(e) => setModel(e.target.value)} spellCheck={false} title="Имя модели на сервере" />
+          </label>
+          <button type="button" className="btn btn-ghost" onClick={() => setPasting((v) => !v)} aria-expanded={pasting}><IconText />Список</button>
+          <button type="button" className="btn btn-primary" onClick={() => scan(rows.map((r) => ({ id: r.id, raw_address: r.raw_address })))} disabled={!!scanning || !rowsCount}>
+            {scanning ? `Сверяю ${scanning}` : rowsCount ? `Сверить ${count(rowsCount, ADDRESSES)}` : "Нет записей в сессии"}
+          </button>
+        </div>
+      </div>
+      {pasting && (
+        <form className="scan-paste" onSubmit={(e) => { e.preventDefault(); scan(lines.map((l, i) => ({ id: `conflict_${Date.now()}_${i + 1}`, raw_address: l }))); }}>
+          <textarea className="field" rows={3} value={paste} onChange={(e) => setPaste(e.target.value)} aria-label="Адреса, по одному в строке" spellCheck={false} />
+          <button type="submit" className="btn btn-ghost" disabled={!!scanning || !lines.length}>Сверить {count(lines.length, ADDRESSES)}</button>
+        </form>
+      )}
+      {(last || error) && (
+        <div className="scan-status">
+          {error ? <span className="error">{error}</span> : last && (
+            <>
+              <Chip status="idle">проверено {last.scanned}</Chip>
+              <Chip status={last.needs_review ? "flag" : "ok"}>к оператору {last.needs_review}</Chip>
+              <Chip status="idle">новых {last.queued} · обновлено {last.updated} · уже решены {last.kept_decided}</Chip>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ compare drawer */
+
+function ConflictDrawer({ c, position, picks, overrides, busy, onClose, onPrev, onNext, onPick, onType, onDecide }: {
   c: Conflict;
+  position?: string;
   picks: Picks;
   overrides: Overrides;
   busy: boolean;
-  active: boolean;
-  onActivate: () => void;
+  onClose: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
   onPick: (f: Field, side: Side) => void;
   onType: (f: Field, v: string) => void;
   onDecide: (choice: "ours" | "ai" | "custom" | "dismiss") => void;
@@ -265,84 +322,100 @@ function ConflictCard({ c, picks, overrides, busy, active, onActivate, onPick, o
     ...FIELDS.filter((f) => !disputed.has(f) && (c.ours[f] || c.ai[f])),
   ];
   const hasCustom = Object.keys(picks).length > 0 || Object.values(overrides).some((v) => v !== undefined);
-  const finalOf = (f: Field) => overrides[f] ?? (picks[f] === "ai" ? c.ai[f] ?? "" : picks[f] === "ours" ? c.ours[f] ?? "" : "");
+  const finalOf = (f: Field) => overrides[f] ?? (picks[f] === "ai" ? c.ai[f] ?? "" : picks[f] === "ours" ? c.ours[f] ?? "" : c.ours[f] ?? "");
+
+  // 1 = local model · 2 = AI · D = dismiss
+  useEffect(() => {
+    if (!pending) return;
+    const h = (ev: KeyboardEvent) => {
+      const tag = (ev.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || busy || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      if (ev.key === "1") onDecide("ours");
+      else if (ev.key === "2" && c.disagreements.length) onDecide("ai");
+      else if (ev.code === "KeyD") onDecide("dismiss");
+      else return;
+      ev.preventDefault();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [pending, busy, c, onDecide]);
 
   return (
-    <article className={`card conflict ${active ? "is-active" : ""}`} tabIndex={0} onMouseEnter={onActivate} onFocus={onActivate} aria-busy={busy}>
-      <header className="conflict-head">
-        <div className="conflict-raw">
-          <p className="eyebrow muted">{c.record_id}</p>
-          <p className="raw">{c.raw_address}</p>
+    <Drawer open label={`Конфликт ${c.record_id}`} position={position} onClose={onClose} onPrev={onPrev} onNext={onNext}
+      header={
+        <div className="drawer-title">
+          <p className="drawer-id mono">{c.record_id}</p>
+          {pending
+            ? <Chip status="flag">ждёт решения</Chip>
+            : <Chip status={c.status === "dismissed" ? "idle" : "ok"} strong={c.status === "resolved"}>{CHOICE_LABEL[c.resolution?.choice ?? "dismiss"]}</Chip>}
         </div>
-        <div className="conflict-tags">
+      }
+      footer={pending ? (
+        <>
+          <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => onDecide("dismiss")}>Отклонить<kbd>D</kbd></button>
+          <span className="drawer-foot-spacer" />
+          {hasCustom && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => onDecide("custom")}>Сохранить выбор</button>}
+          <button type="button" className="btn btn-ghost" disabled={busy || !c.disagreements.length} onClick={() => onDecide("ai")}>ИИ<kbd>2</kbd></button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => onDecide("ours")}>Локальная<kbd className="kbd-inv">1</kbd></button>
+        </>
+      ) : (
+        <p className="muted">
+          {fmtWhen((c.resolved_at ?? c.updated_at) * 1000)}{c.resolution?.reviewer ? ` · ${c.resolution.reviewer}` : ""}{c.resolution?.note ? ` · ${c.resolution.note}` : ""}
+        </p>
+      )}
+    >
+      <section className="insp-raw">
+        <p className="eyebrow">Исходная строка</p>
+        <p className="insp-raw-text">{c.raw_address}</p>
+        <div className="reason-row">
           {c.reasons.map((r) => (
             <Chip key={r} status={REASON[r].status}>
-              {r === "disagreement" ? `${REASON[r].label}: ${c.disagreements.map((f) => FIELD_LABELS[f]).join(", ")}`
-                : r === "low_confidence" ? `${REASON[r].label} ${c.confidence?.toFixed(2)}` : REASON[r].label}
+              {r === "low_confidence" && c.confidence != null ? `${REASON[r].label} ${fmtScore(c.confidence)}` : REASON[r].label}
             </Chip>
           ))}
-          <Chip status="idle">{c.provider} · {c.model}</Chip>
         </div>
-      </header>
+      </section>
 
-      <div className="compare-wrap">
-        <table className="compare">
-          <thead>
-            <tr>
-              <th>Поле</th>
-              <th>Локальная модель{c.confidence != null && <span className="th-meta"> · {c.confidence.toFixed(2)}</span>}</th>
-              <th>AI API</th>
-              {pending ? <th>Итог (своё значение)</th> : <th>Решение</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((f) => {
-              const dis = disputed.has(f);
-              return (
-                <tr key={f} className={dis ? "is-dispute" : "is-same"}>
-                  <td className="f">{FIELD_LABELS[f]}</td>
-                  {(["ours", "ai"] as Side[]).map((side) => (
-                    <td key={side}>
-                      {dis && pending ? (
-                        <button type="button" className={`pick ${picks[f] === side ? "is-picked" : ""}`} onClick={() => onPick(f, side)}
-                          aria-pressed={picks[f] === side} title={side === "ours" ? "взять значение локальной модели" : "взять значение ИИ"}>
-                          <Value v={side === "ours" ? c.ours[f] : c.ai[f]} />
-                          {picks[f] === side && <IconCheck />}
-                        </button>
-                      ) : <span className={dis ? "" : "same"}><Value v={side === "ours" ? c.ours[f] : c.ai[f]} /></span>}
-                    </td>
-                  ))}
-                  <td>
-                    {pending
-                      ? dis ? <input className="field final" value={finalOf(f)} onChange={(e) => onType(f, e.target.value)} placeholder="выберите слева или впишите" aria-label={`Итог · ${FIELD_LABELS[f]}`} />
-                            : <span className="same muted">совпадает</span>
-                      : <span className={c.resolution?.fields && c.resolution.fields[f] !== c.ours[f] ? "changed" : ""}><Value v={c.resolution?.fields?.[f]} /></span>}
-                  </td>
-                </tr>
-              );
-            })}
-            {!shown.length && <tr><td colSpan={4} className="muted">Обе стороны не нашли ни одного поля.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      <section className="cmp">
+        <div className="cmp-head">
+          <span>Поле</span>
+          <span>Локальная модель{c.confidence != null ? <b className="mono"> {fmtScore(c.confidence)}</b> : null}</span>
+          <span>ИИ <b className="mono">{c.model || c.provider}</b></span>
+        </div>
+        {shown.map((f) => {
+          const dis = disputed.has(f);
+          return (
+            <div key={f} className={`cmp-row ${dis ? "is-dispute" : ""}`}>
+              <span className="cmp-field">{dis && <i className="cmp-dot" aria-hidden="true" />}{FIELD_LABELS[f]}</span>
+              {(["ours", "ai"] as Side[]).map((side) => {
+                const v = side === "ours" ? c.ours[f] : c.ai[f];
+                return dis && pending ? (
+                  <button key={side} type="button" className={`pick ${picks[f] === side ? "is-picked" : ""}`} onClick={() => onPick(f, side)} aria-pressed={picks[f] === side}>
+                    <Value v={v} />{picks[f] === side && <IconCheck />}
+                  </button>
+                ) : <span key={side} className={`cmp-val ${dis ? "" : "is-same"}`}><Value v={v} /></span>;
+              })}
+              {dis && pending && (
+                <label className="cmp-final">
+                  <span>Итог</span>
+                  <input className="field" value={finalOf(f)} onChange={(e) => onType(f, e.target.value)} aria-label={`Итог · ${FIELD_LABELS[f]}`} spellCheck={false} />
+                </label>
+              )}
+              {!pending && dis && c.resolution?.fields && (
+                <span className="cmp-final is-read"><span>Итог</span><b className="cmp-final-val"><Value v={c.resolution.fields[f]} /></b></span>
+              )}
+            </div>
+          );
+        })}
+        {!shown.length && <p className="muted cmp-empty">Обе стороны не нашли ни одного поля.</p>}
+      </section>
 
-      {c.issues.length > 0 && <p className="conflict-issues mono">замечания: {c.issues.join(" · ")}</p>}
-
-      <footer className="conflict-actions">
-        {pending ? (
-          <>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => onDecide("ours")}>Принять локальную <kbd>1</kbd></button>
-            <button type="button" className="btn btn-ghost" disabled={busy || !c.disagreements.length} onClick={() => onDecide("ai")}>Принять ИИ <kbd>2</kbd></button>
-            {hasCustom && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => onDecide("custom")}>Сохранить выбор</button>}
-            <button type="button" className="link-btn muted-link" disabled={busy} onClick={() => onDecide("dismiss")}>Отклонить <kbd>D</kbd></button>
-          </>
-        ) : (
-          <>
-            <Chip status={c.status === "dismissed" ? "idle" : "ok"}>{CHOICE_LABEL[c.resolution?.choice ?? "dismiss"]}</Chip>
-            <span className="muted mono" style={{ fontSize: 12 }}>{when(c.resolved_at)}{c.resolution?.reviewer ? ` · ${c.resolution.reviewer}` : ""}</span>
-          </>
-        )}
-      </footer>
-    </article>
+      {c.issues.length > 0 && (
+        <section className="cmp-issues">
+          <p className="eyebrow">Замечания ИИ</p>
+          <ul>{c.issues.map((i) => <li key={i}>{i}</li>)}</ul>
+        </section>
+      )}
+    </Drawer>
   );
 }

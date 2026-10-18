@@ -3,7 +3,8 @@ import { fmtInt } from "../../format";
 import { PATHS } from "../../routes";
 import { useService } from "../../state/service";
 import { useSession } from "../../state/session";
-import { IconCompare, IconGrid, IconPin, IconTable, IconZap } from "../ui";
+import logo from "../../assets/jana-post-logo.png";
+import { IconCompare, IconGrid, IconTable, IconZap } from "../ui";
 
 export function Sidebar() {
   const { apiOk, version, conflictsPending } = useService();
@@ -21,12 +22,9 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <NavLink to={PATHS.dashboard} className="brand" aria-label="Jana Address, обзор">
-        <span className="brand-mark"><IconPin /></span>
-        <span className="brand-text">
-          <span className="brand-name">Jana Address</span>
-          <span className="brand-sub">Jana Post</span>
-        </span>
+      <NavLink to={PATHS.dashboard} className="brand" aria-label="Jana Post · Address, обзор">
+        <img className="brand-logo" src={logo} alt="Jana Post" width={66} height={30} />
+        <span className="brand-product">Address</span>
       </NavLink>
 
       <nav className="side-nav" aria-label="Разделы">

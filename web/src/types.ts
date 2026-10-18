@@ -6,7 +6,7 @@ export type Field = (typeof FIELDS)[number];
 
 export const FIELD_LABELS: Record<Field, string> = {
   province: "Область", city: "Город", district: "Район", living_area: "Жилой массив",
-  street_type: "Тип улицы", street_name: "Улица", house: "Дом", apartment: "Кв",
+  street_type: "Тип улицы", street_name: "Улица", house: "Дом", apartment: "Квартира",
   entrance: "Подъезд", floor: "Этаж", landmark: "Ориентир",
 };
 
@@ -22,8 +22,30 @@ export interface RecordOut {
   confidence: number;
   // explain mode
   spans?: Span[]; tokens?: Token[]; flags?: string[]; provenance?: Record<string, string | null>;
+  field_confidence?: Partial<Record<Field, number>>;
+  geo?: Geo | null;
   // UI state
   edited?: boolean; reviewed?: boolean;
+  original?: Record<Field, string | null>;   // field values before the first manual edit
+}
+
+/** Geocoder answer attached in explain mode (api/jana_address/gazetteer/osm.py · geocode). */
+export interface Geo {
+  lat: number;
+  lon: number;
+  precision: string;
+  source?: string;
+  matched?: string;
+  in_database?: boolean;
+}
+
+/** Where a field value came from (ExplainOut.provenance). */
+export function provenanceLabel(p: string | null | undefined): string | null {
+  if (!p) return null;
+  if (p.startsWith("gazetteer")) return p.endsWith(":house") ? "OSM · дом" : "OSM";
+  if (p === "string+table") return "строка · словарь";
+  if (p === "string") return "строка";
+  return p;
 }
 
 export const JURY_KEYS = ["id", "raw_address", ...FIELDS, "confidence"] as const;

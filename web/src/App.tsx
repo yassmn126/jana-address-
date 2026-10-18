@@ -19,9 +19,8 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route index element={<RootRedirect />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="records" element={<Records />} />
-        <Route path="records/:id" element={<Records />} />
-        <Route path="conflicts" element={<Conflicts />} />
+        <Route path="records/:id?" element={<Records />} />
+        <Route path="conflicts/:id?" element={<Conflicts />} />
         <Route path="parse" element={<QuickTest />} />
         <Route path="*" element={<NotFound />} />
       </Route>
