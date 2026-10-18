@@ -107,10 +107,21 @@ Last run: healthy 1.1 s · exact schema OK · 100.00 / 100.00 · 0 records diffe
 
 ### Review UI (http://localhost:3000)
 
-Drag & drop a file or paste addresses → table with colored spans in the raw string; every field editable; sort by
-confidence (the review queue); export in the jury schema. Click-to-relabel: select text, press **S** street · **H** house ·
-**A** apartment · **E** entrance · **F** floor · **D** district · **L** living area · **M** landmark · **C** city;
-**Enter** accepts, **J/K** moves. Pages: Dashboard · Batch · Quick test · Conflicts (our parser vs an AI second opinion).
+| path | page |
+|---|---|
+| `/dashboard` | next step (upload · review queue · done · API down), session numbers, review queue, confidence histogram, field fill, cities; run archive and geocoding precision from `/api/v1/runs` |
+| `/records`, `/records/:id` | every parsed record: status tabs, city, filters (confidence band, empty fields, OSM geocode level, parser flags) with counts, search, sort, 25–200 rows per page, bulk accept and export. The right-hand drawer edits all 11 fields with per-field confidence and source, shows the geocode, **why this score** and a one-record AI cross-check |
+| `/conflicts`, `/conflicts/:id` | our parser vs an AI second opinion: table by reason and field, compare drawer, pick per field |
+| `/parse` | one string: fields with sources, geocode, why this score, copy JSON, add to records |
+
+**Why this score** shows exact SHAP values of the calibrated confidence model: it is a standardized logistic regression +
+isotonic table (`api/artifacts/calibrator.json`), every feature is in the explain response, so the browser rebuilds the
+feature vector and splits the logit per feature (`web/src/lib/explain.ts`; reproduces the API's score on all demo records).
+
+Keys: **J/K** or **↑/↓** step · **Enter** accept · **Esc** close · **/** search · **[** collapse the sidebar; in the record
+drawer select text in the raw string and press **S** street · **H** house · **A** apartment · **E** entrance · **F** floor ·
+**D** district · **L** living area · **M** landmark · **C** city · **P** region. In conflicts: **1** ours · **2** AI · **D** dismiss.
+Filters, sort and page are in the URL, so every view is a link; the working session is kept in the browser's IndexedDB.
 Corrections go to `POST /api/v1/corrections` for retraining only — they are never consulted at inference.
 
 ### Develop
