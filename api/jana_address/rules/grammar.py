@@ -29,7 +29,7 @@ from pathlib import Path
 
 import yaml
 
-from ..preprocess import extract, clean, match_view, norm_token
+from ..preprocess import KAZAKH_ONLY, RUSSIAN_LETTERS, extract, layout_to_ru, looks_wrong_layout, clean, match_view, norm_token
 from ..tokenizer import Token, tokenize
 
 HERE = Path(__file__).parent
@@ -177,8 +177,15 @@ class RuleParser:
     # ---------------------------------------------------------------- public
     def parse(self, raw: str) -> RuleParse:
         text = clean(raw)
-        toks = tokenize(text)
+        self._whole_layout = False
+        fixed = self._layout_fix(text)
+        toks = tokenize(fixed)
         rp = RuleParse(raw=raw, tokens=toks)
+        if fixed != text:
+            rp.flags.append("layout_fixed")   # tokens carry the ЙЦУКЕН reading; values are still cut from rp.raw as written
+            if self._whole_layout:
+                rp.flags.append("layout_fixed_whole")
+                rp.meta["value_text"] = fixed   # the whole string was typed in the wrong layout: the values are what was meant
         if not toks:
             rp.flags.append("empty")
             return rp
@@ -208,6 +215,89 @@ class RuleParser:
         self._street_leftover(rp)            # «Айнабулак-3, дом 150»: the only free chunk is the street
         self._leftovers(rp)
         return rp
+
+    # --------------------------------------------------------------- wrong keyboard layout
+    _CHUNK = re.compile(r"[^\s]+")
+
+    def _layout_known(self, chunk: str) -> bool:
+        """The chunk read as ЙЦУКЕН is a keyword, a city, a settlement or a street («ek» → «ул», «Fkvfns» → «Алматы»,
+        «Nehfy» → «Туран»)."""
+        from ..gazetteer.osm import get_gazetteer
+        inner = re.sub(r"^[^\w]+|[^\w]+$", "", chunk)      # «ek.»: the trailing dot is punctuation, not «ю»
+        readings = {layout_to_ru(chunk, full=True), layout_to_ru(inner, full=True)}
+        for ru in readings:
+            whole_core = norm_token(re.sub(r"^[^\w]+|[^\w]+$", "", ru))
+            if len(whole_core) >= 3 and (whole_core in self.lex.roles or whole_core in self.lex.street_type_of):
+                return True                                   # «h-y» → «р-н», «;/v» → «ж/м»: hyphen / slash keywords
+        for part in re.split(r"[^\w]+|\d+", " ".join(readings)):   # «ek/Itdxtyrj» → «ул», «Шевченко»; «5vrh» → «мкр»
+            core = norm_token(part).strip("-")
+            if not core:
+                continue
+            if len(core) == 1:
+                continue                                      # «E 26» is a street in Astana: a lone letter is never remapped
+            if core in self.lex.roles or core in self.lex.street_type_of or match_view(core) in self.lex.city_by_name:
+                return True
+            if len(core) >= 4 and (self._known_settlement(core) or get_gazetteer().street_anywhere(core)
+                                   or get_gazetteer().living_base_anywhere(core)):
+                return True
+        return False
+
+    @staticmethod
+    def _latin_word_like(chunk: str) -> bool:
+        """«Esentai», «City», «Abay»: a plausible Latin word (35 %+ vowels, no layout-only keys) — kept inside a wrong-layout string."""
+        letters = [ch for ch in chunk if ch.isascii() and ch.isalpha()]
+        if len(letters) < 3 or re.search(r"[\[\]{};:'\"<>]", chunk):
+            return False
+        vowels = sum(1 for ch in letters if ch.lower() in "aeiouy")
+        return vowels / len(letters) >= 0.35
+
+    def _layout_fix(self, text: str) -> str:
+        """«Fkvfns, ek. F,fz 10» → «Алматы, ул. Абая 10» for recognition only (same length, so offsets into raw hold).
+        A Latin chunk is remapped when (a) its ЙЦУКЕН reading is a known keyword / place, or (b) it has no Latin vowel
+        but a Cyrillic one once mapped, or (c) the whole string has no Cyrillic and two chunks already qualified."""
+        chunks = list(self._CHUNK.finditer(text))
+        latin = [m for m in chunks if any(ch.isascii() and ch.isalpha() for ch in m.group(0))
+                 and not RUSSIAN_LETTERS.search(m.group(0))      # Kazakh-only letters («gәnth» = пәтер) have no QWERTY key
+                 and all(ch.isascii() or ch in KAZAKH_ONLY for ch in m.group(0) if ch.isalpha())]   # «shaǵyn», «úi»: Kazakh Latin
+        if not latin:
+            return text
+        lex_latin = set()
+        for m in latin:
+            for part in re.split(r"[^\w]+", m.group(0)):
+                core = norm_token(part)
+                look = match_view(core)                       # «CT», «kb», «TOO»: Latin lookalikes of Cyrillic words
+                if len(core) >= 2 and (core in self.lex.roles or core in self.lex.street_type_of
+                                       or look in self.lex.roles or look in self.lex.street_type_of or look in self.lex.city_by_name):
+                    lex_latin.add(m.start())                  # a real Latin keyword («mkr», «kv», «street») is never remapped
+                    break
+        hits = []
+        for m in latin:
+            if m.start() in lex_latin:
+                continue
+            chunk = m.group(0)
+            if self._layout_known(chunk) or (not any(ch.isdigit() for ch in chunk) and looks_wrong_layout(chunk)):
+                hits.append(m)                                # «12ljv», «Fkvfns?F,fz?10?5»: known parts; «{fy»: a layout key
+        if not hits:
+            return text
+        whole = not RUSSIAN_LETTERS.search(text) and (len(hits) >= 2 or len(hits) * 2 >= len(latin))
+        if whole:
+            self._whole_layout = True                        # «Fkvfns? ek/ F,fz 10? rd 5» → «Алматы, ул. Абая 10, кв 5»
+            hit_starts = {m.start() for m in hits}
+            out = list(layout_to_ru(text, full=True))
+            for m in latin:                                  # … but «Esentai City» inside it stays a Latin brand name
+                if m.start() not in hit_starts and self._latin_word_like(m.group(0)):
+                    out[m.start():m.end()] = m.group(0)
+            return "".join(out)
+        out = list(text)
+        for m in hits:                                        # a hit chunk was typed wholly in the wrong layout …
+            chunk = m.group(0)
+            tail = len(chunk) - len(chunk.rstrip(",.?/;:!"))   # … but its trailing separator («h-y,», «ek.») is punctuation
+            head, rest = chunk[:len(chunk) - tail], chunk[len(chunk) - tail:]
+            fixed = layout_to_ru(head, full=True)
+            if norm_token(fixed) in self.lex.roles or norm_token(fixed) in self.lex.street_type_of:
+                rest = rest.replace("/", ".")                 # «ek/» = «ул.»: the period key in the other layout
+            out[m.start():m.end()] = fixed + rest.replace("?", ",")
+        return "".join(out)
 
     # --------------------------------------------------------------- gazetteer-aware helpers (lazy import: osm.py imports us)
     def _known_settlement(self, text: str) -> bool:
@@ -496,7 +586,8 @@ class RuleParser:
                 rp.flags.append("postcode")
                 continue
             # ordinal suffix right after a number («11-ші», «2-й», «3-го»): transparent, never a value
-            if t.kind == "WORD" and norm_token(t.text) in self.lex.ordinal_suffix and i > 0:
+            if t.kind == "WORD" and norm_token(t.text) in self.lex.ordinal_suffix and i > 0 \
+                    and not (t.text.isascii() and t.space_before):            # «5th» yes; «15 rd» is «15 кв»
                 prev = toks[i - 1]
                 prev2 = toks[i - 2] if i > 1 else None
                 if prev.kind == "NUM" or (prev.kind == "PUNCT" and prev.text == "-" and prev2 is not None and prev2.kind == "NUM"):
@@ -1247,8 +1338,9 @@ class RuleParser:
                     elif q2 is not None and toks[q2].role == "house_kw" or (q2 is not None and "HOUSE" in rp.spans
                                                                              and rp.spans["HOUSE"].start >= toks[q2].start):
                         second = -1
-                    if second is not None and self._known_microdistrict(rp, " ".join(toks[k].text for k in idxs)):
-                        # «Орбита 3, 27а», «Аксай 3 д 20»: a known микрорайон + number → the number is part of the name
+                    base = " ".join(toks[k].text for k in idxs)
+                    if second is not None and (self._known_microdistrict(rp, base) or self._living_anywhere(f"{base} {toks[q].text}")):
+                        # «Орбита 3, 27а», «Аксай 3 д 20», «Самал 3; 15»: a known микрорайон + number → the number is the name's
                         self._set(rp, "STREET_NAME", toks, idxs + [q], "fallback_micro_number", 0.65)
                         rp.flags.append("street_without_type")
                         rp.flags.append("microdistrict_number_in_name")

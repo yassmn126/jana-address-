@@ -1,0 +1,116 @@
+[
+ {
+  "raw_address": "Батыс Қазақстан облысы, Ақсай қаласы, 4 шағын аудан, 7 үй, 15 пәтер",
+  "fields": {
+   "province": "Западно-Казахстанская область",
+   "city": "Аксай",
+   "district": null,
+   "living_area": null,
+   "street_type": "микрорайон",
+   "street_name": "4",
+   "house": "7",
+   "apartment": "15",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:city"
+  ]
+ },
+ {
+  "raw_address": "Уральск, ул. Евразия 119 литер Б, офис 4",
+  "fields": {
+   "province": null,
+   "city": "Уральск",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "Евразия",
+   "house": "119/Б",
+   "apartment": "4",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Талдыкорган, Шевченка 128 кор.2 кв 15",
+  "fields": {
+   "province": null,
+   "city": "Талдыкорган",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Шевченка",
+   "house": "128/2",
+   "apartment": "15",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Балхаш, Ленина 3 литер А, магазин Магнум напротив",
+  "fields": {
+   "province": null,
+   "city": "Балхаш",
+   "district": null,
+   "living_area": null,
+   "street_type": null,
+   "street_name": "Ленина",
+   "house": "3/А",
+   "apartment": null,
+   "entrance": null,
+   "floor": null,
+   "landmark": "магазин Магнум"
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "Актобе, пр-т Санкибай батыра 22к3, кв 105, ориентир ТРЦ Керуен Сити",
+  "fields": {
+   "province": null,
+   "city": "Актобе",
+   "district": null,
+   "living_area": null,
+   "street_type": "проспект",
+   "street_name": "Санкибай батыра",
+   "house": "22/3",
+   "apartment": "105",
+   "entrance": null,
+   "floor": null,
+   "landmark": "ТРЦ Керуен Сити"
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ },
+ {
+  "raw_address": "КЫЗЫЛОРДА; УЛ. АЙТЕКЕ БИ 25\"А\"; КВ 7",
+  "fields": {
+   "province": null,
+   "city": "КЫЗЫЛОРДА",
+   "district": null,
+   "living_area": null,
+   "street_type": "улица",
+   "street_name": "АЙТЕКЕ БИ",
+   "house": "25А",
+   "apartment": "7",
+   "entrance": null,
+   "floor": null,
+   "landmark": null
+  },
+  "errors": [
+   "not_in_string:house"
+  ]
+ }
+]

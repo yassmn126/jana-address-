@@ -103,7 +103,8 @@ below was measured **once**, before any fix that followed it.
 | #2 `claude_heldout` (263) | regional, untouched at round 2 | 96.30 | 99.33 | 100.00 |
 | #3 `claude_heldout3` (263) | regional, untouched at round 3 | 93.91 | 98.36 | 99.78 |
 | #4 `claude_hard` (217) | **adversarial**, 16 themes, untouched at round 4 | 85.69 | 91.66 | 98.92 |
-| **#5 `claude_hard2` (~190)** | **adversarial, untouched, measured once after everything** | **83.51** | **90.42** | **96.47** |
+| **#5 `claude_hard2` (~190)** | **adversarial, untouched, measured once per model, never fixed against** | **83.51** | **90.42** | **96.47 (v6) → 98.98 (v8)** |
+| **#6 `claude_heldout6` (260)** | **regional, untouched, measured once per model, never fixed against** | 98.49 (main after PR #3) | 98.49 (v6 + layout pass) | **98.94 (v8)** |
 
 The adversarial themes (`eval/llm_generate.py --hard`): several typos per string, keyboard-layout mixing («Aлматы»,
 «Turan аvenue»), the 2021 Kazakh Latin alphabet («Abai daŋğyly», «köşesi», «päter»), everything glued («ТолебиДом202кв17»),
@@ -133,7 +134,12 @@ What rounds 3–4 changed (all covered by `api/tests/test_independent_benchmark.
   model spans never contain a phone, a bracket alias, a postcode, a PO box or a separator; leading/trailing noise words
   («частный», «номер», «тел») are trimmed off name spans on both sides.
 * Model v7 (warm start on the 789 Claude-labeled rows ×5 + 60k synthetic) was trained and rejected: +0.2 on the hard set,
-  −0.5 on dev_handmade — 789 rows overfit. More teacher data (5–10k Claude rows) is the next step, not a smaller one.
+  −0.5 on dev_handmade — 789 rows overfit.
+* **Model v8** (PR #4): Claude as the teacher — 5 861 fresh labeled rows (4 regional + 4 adversarial runs, deduplicated,
+  the untouched sets excluded) plus the four benchmark sets, ×3, with 60k Latin-aware synthetic rows; warm start from v6,
+  4 epochs. Untouched hard set #5: 96.47 → **98.98**; untouched regional set #6: 98.49 → **98.94**; adversarial dev
+  98.92 → 99.55. Cost: one synthetic artifact and the «ЖК Хайвил Астана» convention record (Q6a) — the hand-labeled sets
+  are otherwise at 100.00.
 
 Still wrong on the untouched hard set #5 (27 records, left as is): mostly the same label-vs-convention splits
 («садоводство Энергетик» as a street, house ranges «170-172», «с/о Тобол» as a living area, number words «жиырма

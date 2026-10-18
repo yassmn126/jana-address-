@@ -28,11 +28,52 @@ sys.path.insert(0, str(ROOT / "api"))
 
 from eval.ab import load_gold  # noqa: E402
 from eval.metric import ADDRESS, DETAILS, REFS, norm, score  # noqa: E402
+from jana_address.preprocess import HOMOGLYPHS, RU2EN, layout_to_ru  # noqa: E402
 from jana_address.service import parse_one  # noqa: E402
 
 SCORED = ADDRESS + DETAILS + REFS
 DEFAULT_GOLD = ["data/test_handmade.json", "data/stress_handmade.json", "data/dev_handmade.json", "data/conventions_examples.json",
                 "data/rural_handmade.json"]
+
+
+_CYR2LAT = {"а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "к": "k", "м": "m", "т": "t", "в": "b", "н": "h",
+            "А": "A", "Е": "E", "О": "O", "Р": "P", "С": "C", "Х": "X", "У": "Y", "К": "K", "М": "M", "Т": "T", "В": "B", "Н": "H"}
+
+
+def _seeded(s: str) -> random.Random:
+    return random.Random(hash(s) & 0xFFFFFFFF)          # the same string always gets the same corruption
+
+
+def _homoglyph(s: str, p: float) -> str:
+    """Cyrillic letters replaced by their Latin lookalikes — a wrong-layout «с», «а», «о» mid-word (p = share of candidates)."""
+    rnd = _seeded(s)
+    return "".join(_CYR2LAT[ch] if ch in _CYR2LAT and rnd.random() < p else ch for ch in s)
+
+
+def _wrong_layout_words(s: str, p: float = 0.25) -> str:
+    """A quarter of the Cyrillic words typed with the keyboard left in the Latin layout («Алматы» → «Fkvfns»)."""
+    rnd = _seeded(s)
+    return " ".join(w.translate(RU2EN) if rnd.random() < p and re.search(r"[А-Яа-яЁё]", w) else w for w in s.split(" "))
+
+
+def _wrong_layout_all(s: str) -> str:
+    """The whole string typed in the wrong layout («Алматы, ул. Абая 10» → «Fkvfns? ek/ F,fz 10»)."""
+    return s.translate(RU2EN)
+
+
+def fold_homoglyph(v):
+    """Comparison view for the lookalike transformations: Latin lookalikes read as Cyrillic on both sides."""
+    return None if v is None else norm(str(v).translate(HOMOGLYPHS))
+
+
+def fold_layout(v):
+    """Comparison view for the wrong-layout transformations: both sides read as ЙЦУКЕН keys."""
+    return None if v is None else norm(layout_to_ru(str(v), full=True))
+
+
+# transformations whose VALUES change too: the gold is compared through the fold, not literally
+FOLDED = {"homoglyph_30": fold_homoglyph, "homoglyph_all": fold_homoglyph,
+          "wrong_layout_words": fold_layout, "wrong_layout_all": fold_layout}
 
 
 def _kv_latin(s: str) -> str:
@@ -57,6 +98,10 @@ TRANSFORMS = {
     "kv_latin": _kv_latin,
     "kv_glued": lambda s: re.sub(r"\bкв\.?\s+(?=\d)", "кв", s),
     "semicolons": lambda s: s.replace(",", ";"),
+    "homoglyph_30": lambda s: _homoglyph(s, 0.3),
+    "homoglyph_all": lambda s: _homoglyph(s, 1.0),
+    "wrong_layout_words": _wrong_layout_words,
+    "wrong_layout_all": _wrong_layout_all,
 }
 
 CATEGORIES = {
@@ -100,14 +145,20 @@ def main(argv=None) -> int:
     summary = {}
     for name, fn in TRANSFORMS.items():
         preds, changed = [], []
+        fold = FOLDED.get(name)
+        view = (lambda p: tuple(fold(p.get(f)) for f in SCORED)) if fold else scored_view
         for g, b in zip(gold, base):
             raw2 = fn(g["raw_address"])
             p = parse_one(g["id"], raw2, mode=a.mode)
             preds.append(p)
-            if scored_view(p) != scored_view(b):
+            if view(p) != view(b):
                 diff = {f: (b.get(f), p.get(f)) for f in SCORED if norm(b.get(f)) != norm(p.get(f))}
                 changed.append((raw2, diff))
-        s = score(preds, gold)["score_pct"]
+        if fold:                           # the values changed with the string: compare both sides through the fold
+            s = score([{f: fold(p.get(f)) for f in SCORED} for p in preds],
+                      [{**g, **{f: fold(g.get(f)) for f in SCORED}} for g in gold])["score_pct"]
+        else:
+            s = score(preds, gold)["score_pct"]
         cons = 100 * (1 - len(changed) / len(gold))
         summary[name] = {"score": s, "consistency": round(cons, 2), "changed": len(changed)}
         lines.append(f"| {name} | {s:.2f} | {s - base_score:+.2f} | {cons:.1f} % | {len(changed)} |")

@@ -33,9 +33,10 @@ region and dozens of villages, so province stays null unless the string or the d
 
 ## 2. Results
 
-Jury-metric replica (`eval/metric.py`, strict), `make ab`. Model = **v6** char-CRF: 220k synthetic rows × 6 epochs
-(41 min on an M4 CPU), warm-started on 60k rows from the newer generator (v4b), then on 120k rows whose Latin mode writes
-addresses the way the independent benchmark showed customers type them (v6, 3 epochs, 9 min). Rules = the grammar after the
+Jury-metric replica (`eval/metric.py`, strict), `make ab`. Model = **v8** char-CRF: 220k synthetic rows × 6 epochs
+(41 min on an M4 CPU), warm-started on 60k rows from the newer generator (v4b), then on 120k Latin-aware rows (v6), then
+on **5 861 Claude-written teacher rows ×3 + the four Claude benchmark sets + 60k synthetic** (v8, 4 epochs, 7 min; see
+BENCHMARK.md). v8's gain shows only where it should: on addresses nobody tuned on. Rules = the grammar after the
 stress-set (§2a) and independent-benchmark ([BENCHMARK.md](BENCHMARK.md)) fixes.
 
 | gold set | n | rules | model only | **hybrid** | all-4-address-fields per record (hybrid) |
@@ -43,7 +44,8 @@ stress-set (§2a) and independent-benchmark ([BENCHMARK.md](BENCHMARK.md)) fixes
 | **independent benchmark — written & labeled by Claude Opus 5.5** ([BENCHMARK.md](BENCHMARK.md)) | 526 | 97.41 | 98.85 | **99.47** (97.08 on first contact) | 99.8 % |
 | **untouched held-out — second Claude set, measured once** ([BENCHMARK.md](BENCHMARK.md)) | 263 | 97.19 | 98.83 | **99.33** (main: 96.30) | 98.5 % |
 | **adversarial HARD set #4** — 16 themes of what breaks parsers, fixed against ([BENCHMARK.md](BENCHMARK.md)) | 217 | 89.30 | 90.10 | **98.92** (first contact 91.66, main 85.69) | 97.7 % |
-| **adversarial HARD set #5 — untouched, measured once after everything** | 190 | 94.54 | 94.10 | **96.47** (main 83.51, PR #3 head 90.42) | 87.4 % |
+| **adversarial HARD set #5 — untouched, measured once per model** | 190 | 94.54 | 98.86 | **98.98** (v6: 96.47; main 83.51) | 94.6 % |
+| **regional set #6 — untouched, measured once per model** | 260 | 96.46 | 98.88 | **98.94** (v6: 98.49) | 98.5 % |
 | `test_handmade` — held out (see note) | 89 | 100.00 | 100.00 | **100.00** | 100 % |
 | `stress_handmade` — adversarial (§2a) | 106 | 97.66 | 99.85 | **100.00** | 100 % |
 | `dev_handmade` | 139 | 100.00 | 100.00 | **100.00** | 100 % |
@@ -121,6 +123,34 @@ jury image answers `/api/v1/verify` with 503. Do not send `train.json` to an ext
 «Байконыр» kept as written, «рядом с мечетью» landmark, no landmark from «звонить за час», province provenance for a typo'd
 republican city, and a gold-label inconsistency (open question Q14 in CONVENTIONS.md). Run it with `bash scripts/verify_with_claude.sh`
 (key from a hidden prompt / the clipboard, never echoed) or with no key at all after `ant auth login`.
+
+### Wrong keyboard layout and Latin lookalikes
+
+Two corruptions real users produce without noticing: the keyboard left in the Latin layout («Алматы, ул. Абая 10» typed as
+«Fkvfns? ek/ F,fz 10»), and single Latin lookalikes inside Cyrillic words («Aлмaты», «yл.», «кв» as «kb»). Lookalikes were
+already folded for dictionary matching (`match_view`); the wrong layout needed a pass of its own (`grammar._layout_fix`):
+
+* every whitespace chunk with Latin letters and no Russian ones is read as ЙЦУКЕН keys; it is a *hit* when that reading
+  is a lexicon keyword, a city, a settlement, a street or a living area of the gazetteer (`ek` → ул, `rd` → кв,
+  `Fkvfns` → Алматы, `Nehfy` → Туран), or when it cannot be a Latin word (a bracket / quote key next to a letter —
+  «[» is х, «;» is ж — no Latin vowel, or 20 % vowels or less in 5+ letters);
+* a hit is remapped in place (same length, so every offset into the raw string holds); real Latin keywords («mkr», «kv»,
+  «street»), Kazakh Latin words («Aqtau», «shaǵyn», «üi») and lone letters («E 26» is an Astana street) never are;
+* when the whole string has no Russian letters and most chunks are hits, the whole string is read as ЙЦУКЕН (`?` is the
+  comma key, `/` the period key) and the **values are the intended text** («Экибастуз», not «"rb,fcnep»); plausible Latin
+  words inside it («Esentai City») are kept. With only some chunks fixed, values stay as written and only recognition
+  (and the gazetteer lookups, through the tokens' reading) uses the fix.
+
+`make robustness` has four such transformations; `api/tests/test_robustness.py` keeps the floors:
+
+| transformation | jury score | records unchanged |
+|---|---|---|
+| homoglyph_30 (30 % of lookalike letters Latin) | 100.00 | 99.8 % |
+| homoglyph_all (every lookalike letter Latin) | 99.47 | 97.6 % |
+| wrong_layout_words (a quarter of the words) | 98.42 | 93.8 % |
+| wrong_layout_all (the whole string) | 99.58 | 98.3 % |
+
+Before the pass, a quarter of wrong-layout words cost 30 points (68–73 on the hand-labeled sets).
 
 ## 2c. Geocoding and suggest — what Yandex / 2GIS address stacks do, offline
 
