@@ -9,7 +9,6 @@ import {
 
 /** The "external AI" options of eval/llm_verify.py (training/label_llm.py PROVIDERS). */
 const PROVIDERS = [
-  { id: "anthropic", label: "Claude API · anthropic", model: "claude-opus-5-5", hint: "нужен ANTHROPIC_API_KEY на сервере" },
   { id: "openai-compatible", label: "Локальный LLM · openai-compatible", model: "", hint: "vLLM в кампусе: OPENAI_BASE_URL, данные не уходят наружу" },
   { id: "rules", label: "Только правила · rules", model: "rules", hint: "без сети и ИИ — проверка самой цепочки" },
 ];

@@ -1,0 +1,32 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "jana-address-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5173", "--bind", "127.0.0.1"],
+      "port": 5173
+    },
+    {
+      "name": "jana-address-api",
+      "runtimeExecutable": "C:\\Users\\My Asus\\OneDrive\\Desktop\\jana-address\\api\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "jana_address.main:app", "--app-dir", "C:\\Users\\My Asus\\OneDrive\\Desktop\\jana-address\\api", "--host", "127.0.0.1", "--port", "8000"],
+      "cwd": "C:\\Users\\My Asus\\OneDrive\\Desktop\\jana-address\\api",
+      "env": { "JANA_DATA_DIR": "C:\\Users\\My Asus\\OneDrive\\Desktop\\jana-address\\data" },
+      "port": 8000,
+      "url": "http://localhost:8000"
+    },
+    {
+      "name": "jana-address-dist",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5175", "--bind", "127.0.0.1", "--directory", "C:\\Users\\My Asus\\OneDrive\\Desktop\\jana-address\\web\\dist"],
+      "port": 5175
+    },
+    {
+      "name": "jana-address-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\My Asus\\OneDrive\\Desktop\\jana-address\\web\\node_modules\\vite\\bin\\vite.js", "C:\\Users\\My Asus\\OneDrive\\Desktop\\jana-address\\web", "--port", "5174", "--strictPort"],
+      "port": 5174
+    }
+  ]
+}
