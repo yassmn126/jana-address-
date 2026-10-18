@@ -96,7 +96,7 @@ docs/               CONVENTIONS.md · HANDOFF.md · ML.md · ARCHITECTURE.md
 | Jury-metric replica + error report + speed check | ✅ |
 | Labeling pipeline (LLM / local vLLM / rules) with validators | ✅ (needs train.json) |
 | Dataset builder, synthetic generator, training/export/calibration scripts | ✅ scripts + round-trip tests (no model trained yet) |
-| ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses, ONNX 9.5 MB, 0.7 ms/record; held-out hand-labeled set: rules 96.5 → hybrid 99.6 (jury metric) | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
+| ML tagger: char-CNN+BiLSTM+CRF trained on OSM-generated addresses, ONNX 10.5 MB, 0.6 ms/record; jury metric on hand-labeled sets: held-out 99.8, adversarial stress set 100.0 | ✅ committed in `api/artifacts/` — results in [docs/ML.md](docs/ML.md) |
 | Gazetteer: OSM Kazakhstan → sqlite (settlements ru/kk, provinces, city districts, 5.3k микрорайоны/ЖК, 50k streets, house-level districts), seed fallback | ✅ `make gazetteer` |
 | Calibrated confidence (logistic + isotonic, JSON, numpy-only at runtime) | ✅ on synthetic + handmade gold — refit on the real dev set |
 | Self-training on `train.json` (rules ⊕ model agreement → silver labels + review queue) | ✅ `make pseudo-label` → `make finetune-real` |
