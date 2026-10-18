@@ -5,7 +5,8 @@ SAMPLE ?= data/sample_input.json
 GOLD ?= data/sample_output.json
 
 .PHONY: help up down logs test eval parse label-dry label dataset synth train export calibrate eval-dev images save-images offline-test speed web-dev api-dev \
-        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check history verify robustness geocode-check day0 day0-claude benchmark
+        osm gazetteer synth-grammar train-charcrf ml-cold-start ab pseudo-label finetune-real tune offline-check history verify robustness geocode-check day0 day0-claude benchmark \
+        hard3k hard3k-new ai-cost ai-eval
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -115,6 +116,19 @@ ml-cold-start: gazetteer synth-grammar train-charcrf tune ## everything above + 
 
 benchmark: ## independent benchmark: ours vs Claude-written & -labeled addresses (data/claude_generated.json)
 	$(PY) -m eval.ab --gold data/claude_generated.json --errors-dir runs/cg
+
+hard3k: ## nationwide 3,000-address exam (frozen seed 2026) → runs/hard3k_s2026/{report.md,errors.md}; see docs/HARD3K.md
+	$(PY) -m eval.hard3k_report --gold data/hard3k/hard3k_s2026_gold.json --out runs/hard3k_s2026
+
+hard3k-new: ## a FRESH exam of the same difficulty for development: make hard3k-new SEED=8
+	$(PY) -m eval.hard3k_generate --n 3000 --seed $(or $(SEED),8) --intl 150 --out runs/hard3k_dev && \
+	$(PY) -m eval.hard3k_report --gold runs/hard3k_dev/hard3k_s$(or $(SEED),8)_gold.json --out runs/hard3k_dev/run
+
+ai-cost: ## what the AI path would cost on the hard3k file (no API call): docs/AI_MODE.md
+	$(PY) -m eval.ai_eval --gold data/hard3k/hard3k_s2026_gold.json --mode always --dry-run
+
+ai-eval: ## local vs local+AI on a 600-record sample (needs ANTHROPIC_API_KEY; ~$$0.05 on Haiku 5.5): AI_MODE=fallback|always AI_MODEL=...
+	$(PY) -m eval.ai_eval --gold data/hard3k/hard3k_s2026_gold.json --mode $(or $(AI_MODE),always) --model $(or $(AI_MODEL),claude-haiku-5-5) --limit 600
 
 verify: ## AI cross-check: ours vs an LLM on the demo set → runs/verify/{report.md,review.html,review_queue.jsonl}
 	$(PY) -m eval.llm_verify --input data/demo_input.json --gold data/demo_gold.json --out runs/verify $(VERIFY_ARGS)

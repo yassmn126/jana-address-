@@ -91,16 +91,20 @@ def label_with_anthropic(batch: list[dict], system: str, model: str, usage: dict
     resp = client.beta.messages.create(
         model=model,
         max_tokens=16000,
-        system=system,
+        # explicit breakpoint on the shared system prompt: written once per 5 min, read at 0.05x by every other batch
+        # (a top-level automatic breakpoint lands on the per-batch user message and re-writes everything at 1.25x)
+        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user_message(batch)}],
         output_config={"format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}, "effort": EFFORT},
-        cache_control={"type": "ephemeral"},
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
     )
     usage["input"] += resp.usage.input_tokens
     usage["output"] += resp.usage.output_tokens
     usage["cache_read"] = usage.get("cache_read", 0) + (resp.usage.cache_read_input_tokens or 0)
+    cw = getattr(resp.usage, "cache_creation_input_tokens", 0) or 0
+    if cw:                                              # cache writes cost 1.25x — count them like the Console does
+        usage["cache_write"] = usage.get("cache_write", 0) + cw
     if resp.stop_reason == "refusal":
         category = resp.stop_details.category if resp.stop_details else None
         raise LLMRefusal(f"refusal ({category}) for batch starting {batch[0]['id']}")

@@ -127,7 +127,7 @@ Corrections go to `POST /api/v1/corrections` for retraining only — they are ne
 ### Develop
 
 ```bash
-pip install -r api/requirements-dev.txt && make test     # 323 tests, ~3 min on a laptop
+pip install -r api/requirements-dev.txt && make test     # 355 tests, ~3 min on a laptop
 make api-dev                                             # uvicorn --reload on :8000
 make web-dev                                             # vite dev server on :5173, proxies /api → :8000
 ```
@@ -146,7 +146,8 @@ make web-dev                                             # vite dev server on :5
 | `GET /api/v1/runs` · `/runs/stats` · `/runs/{id}` · `/runs/{id}/download` · `/runs/{id}/points` | **run archive**: every batch ever parsed, kept in SQLite in the `/data` volume — inputs, outputs, confidence, timing, and per record whether the address exists in our database; points for a map |
 | `POST /api/v1/corrections` | store a human correction (training data only) |
 | `POST /api/v1/conflicts/scan` · `GET /api/v1/conflicts` · `…/{id}/resolve` · `…/{id}/approve` | human-in-the-loop queue: our parser vs an AI labeler, disagreements for review |
-| `POST /api/v1/verify` | AI cross-check of a batch (needs credentials; 503 in the jury image) |
+| `POST /api/v1/verify` | AI cross-check of a batch: our answer vs Claude's (needs credentials; 503 in the jury image) |
+| `POST /api/v1/parse/batch?ai=foreign\|fallback\|always` · `GET /api/v1/ai/status` | **AI mode** (off by default): Claude as a second annotator for foreign / uncertain / all records; status shows model, prompt version, tokens, USD |
 | `GET /health` · `GET /version` | liveness; what is loaded (rules, model, mode, gazetteer stats, model metrics) |
 
 Swagger: http://localhost:8000/docs.
@@ -300,8 +301,27 @@ Claude Opus 5.5 (Anthropic API, structured outputs, prompt caching) is used **on
 4. **Day 0** — `make day0-claude`: an independent second labeler for `train.json`, with the organizers' permission;
    without it, day 0 is fully offline.
 
-The jury image contains no credentials and makes no network calls; `/api/v1/verify` answers 503 there. All Claude-written
-data is synthetic; Jana Post data never leaves the machine.
+5. **AI mode at run time, on request** ([docs/AI_MODE.md](docs/AI_MODE.md)) — `?ai=foreign | fallback | always` on the
+   parse endpoints (or env `JANA_AI_MODE`): foreign addresses (detected offline by
+   [`countries.py`](api/jana_address/countries.py): «Кыргызстан, г. Бишкек…» is flagged `foreign:KG` instead of being
+   parsed as a Kazakh city), the low-confidence tail, or every record goes to Claude as a second annotator; every AI value
+   must pass the copy-not-rewrite validators; `GET /api/v1/ai/status` shows the model, prompt version, tokens and USD
+   spent. Default model `claude-fable-5-1` (the strongest), `claude-opus-5-5` / `claude-haiku-5-5` one env var away;
+   `make ai-cost` prints the cost per 1 000 addresses for each.
+
+The jury image contains no credentials, no Claude SDK and makes no network calls; `/api/v1/verify` answers 503 there and
+`?ai=` is ignored. All Claude-written data is synthetic; Jana Post data never leaves the machine.
+
+**Turning the AI on (demo / production, never the jury run):**
+
+| where | how |
+|---|---|
+| Render (the online demo) | Dashboard → service `jana-address-api` → *Environment* → add `ANTHROPIC_API_KEY` and, for a user-scoped key (`sk-ant-usr-…`), `ANTHROPIC_WORKSPACE_ID` → Save → redeploy. The image already has the SDK (`api/Dockerfile.render`). |
+| your laptop, from the repo | `cp .env.example .env`, put the key there, `make api-dev` — or sign in once with `ant auth login` and set `JANA_AI_ASSUME_CREDENTIALS=1` |
+| your laptop, in Docker | `docker compose -f docker-compose.yml -f docker-compose.ai.yml up --build` (reads `.env`) |
+
+The key goes into the Console once and into those places only — never into a chat, a commit or an image. In the UI the
+provider menu («Сверка с внешним ИИ») lists Claude Fable 5.1, Opus 5.5, Haiku 5.5, a local LLM and «Только правила».
 
 ---
 
@@ -363,13 +383,15 @@ scripts/                 offline_check.sh · verify_with_claude.sh
 
 ```bash
 make up / down / logs           # docker compose
-make test                       # 323 tests
+make test                       # 355 tests
 make offline-check              # the jury simulation with --network none
 make speed                      # 1000 records through the running API
 make images save-images         # amd64 + arm64 images → jana-address-images.tar for an offline machine
 
 make ab                         # rules vs model vs hybrid on every gold set, logged to eval/history.jsonl
 make benchmark                  # ours vs the Claude-written benchmark
+make hard3k                     # the nationwide 3 000-address exam (frozen) → runs/hard3k_s2026/report.md
+make ai-cost / ai-eval          # what the AI path costs; local vs local+AI on a 600-record sample
 make robustness                 # 21 metamorphic transformations → docs/ROBUSTNESS.md
 make geocode-check              # 500 real OSM addresses typed messily → distance to the true point
 make verify                     # AI cross-check (needs credentials) → review page

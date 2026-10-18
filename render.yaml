@@ -33,4 +33,6 @@ services:
         value: "8000"
       - key: ANTHROPIC_API_KEY      # provider=anthropic for /verify and /conflicts/scan; set it in the dashboard
         sync: false                 # (Render asks only when the Blueprint is first created; on an existing
-                                    #  service add it under Environment). User-scoped key? also ANTHROPIC_WORKSPACE_ID
+                                    #  service add it under Environment → Add Environment Variable, then Save → redeploy)
+      - key: ANTHROPIC_WORKSPACE_ID # required with a user-scoped key (sk-ant-usr-…): Console → Settings → Workspaces
+        sync: false

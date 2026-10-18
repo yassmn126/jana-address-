@@ -54,7 +54,9 @@ def test_request_shape_structured_output_caching_fallback(monkeypatch):
     kw = calls[0][1]
     assert kw["model"] == "claude-opus-5-5" and kw["output_config"]["format"]["type"] == "json_schema"
     assert kw["output_config"]["effort"] in ("low", "medium", "high", "xhigh", "max")
-    assert kw["cache_control"] == {"type": "ephemeral"} and kw["fallbacks"] == "default"
+    # the cache breakpoint sits on the shared system block (a top-level one would land on the per-batch message)
+    assert kw["system"][0]["cache_control"] == {"type": "ephemeral"} and "cache_control" not in kw
+    assert kw["fallbacks"] == "default"
     assert kw["betas"] == ["server-side-fallback-2026-07-01"]
     assert usage == {"input": 100, "output": 50, "cache_read": 80}
 
